@@ -37,7 +37,7 @@ export const CreateProveedorPage: React.FC = () => {
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<ProveedorForm>({
-    resolver: zodResolver(proveedorSchema),
+    resolver: zodResolver(proveedorSchema) as any,
     defaultValues: {
       provincia: 'Córdoba',
       condicion_fiscal: 'responsable_inscripto',
@@ -70,7 +70,7 @@ export const CreateProveedorPage: React.FC = () => {
         .insert([{
           ...data,
           activo: true
-        }]);
+        }] as any);
 
       if (error) throw error;
       

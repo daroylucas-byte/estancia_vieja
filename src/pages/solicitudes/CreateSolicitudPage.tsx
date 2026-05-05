@@ -29,7 +29,6 @@ export const CreateSolicitudPage: React.FC = () => {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors, isSubmitting },
   } = useForm<SolicitudForm>({
     resolver: zodResolver(solicitudSchema),
@@ -69,7 +68,7 @@ export const CreateSolicitudPage: React.FC = () => {
         solicitante_id: user.id,
         estado: 'pendiente',
         observaciones: data.observaciones || ''
-      });
+      } as any);
 
       if (insertError) throw insertError;
       

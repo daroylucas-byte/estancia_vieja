@@ -6,7 +6,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
 import { Footer } from '@/components/layout/Footer';
 
 const registerSchema = z.object({
@@ -37,7 +36,7 @@ export const RegisterPage: React.FC = () => {
   const onSubmit = async (data: RegisterForm) => {
     setError(null);
     try {
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { error: authError } = await supabase.auth.signUp({
         email: data.email,
         password: data.password,
         options: {

@@ -10,8 +10,8 @@ export const Footer: React.FC = () => {
       </div>
       <nav className="flex gap-6">
         <a className="text-xs font-public-sans text-slate-500 hover:text-primary transition-colors" href="#">Privacidad</a>
-        <a class="text-xs font-public-sans text-slate-500 hover:text-primary transition-colors" href="#">Términos</a>
-        <a class="text-xs font-public-sans text-slate-500 hover:text-primary transition-colors" href="#">Contacto</a>
+        <a className="text-xs font-public-sans text-slate-500 hover:text-primary transition-colors" href="#">Términos</a>
+        <a className="text-xs font-public-sans text-slate-500 hover:text-primary transition-colors" href="#">Contacto</a>
       </nav>
     </footer>
   );

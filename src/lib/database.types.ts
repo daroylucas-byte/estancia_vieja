@@ -403,7 +403,30 @@ export interface Database {
           updated_at?: string
         }
       }
-    }
+      rubros_proveedores: {
+        Row: {
+          id: string
+          nombre: string
+          descripcion: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          nombre: string
+          descripcion?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          nombre?: string
+          descripcion?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+    },
     Enums: {
       rol_usuario: 'area' | 'compras' | 'aprobacion' | 'tribunal_cuentas' | 'jefa_comunal'
       estado_solicitud: 'pendiente' | 'con_presupuestos' | 'aprobada' | 'pendiente_aprobacion_presupuestos' | 'cancelada'

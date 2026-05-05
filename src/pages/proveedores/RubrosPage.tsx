@@ -3,9 +3,8 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
-import type { Database } from '@/lib/database.types';
 
-type Rubro = Database['public']['Tables']['rubros_proveedores']['Row'];
+type Rubro = any;
 
 export const RubrosPage: React.FC = () => {
   const [rubros, setRubros] = useState<Rubro[]>([]);
@@ -25,8 +24,8 @@ export const RubrosPage: React.FC = () => {
   const fetchRubros = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('rubros_proveedores')
+      const { data, error } = await (supabase
+        .from('rubros_proveedores') as any)
         .select('*')
         .order('nombre');
       
@@ -60,14 +59,14 @@ export const RubrosPage: React.FC = () => {
       setIsSubmitting(true);
       
       if (editingRubro) {
-        const { error } = await supabase
-          .from('rubros_proveedores')
+        const { error } = await (supabase
+          .from('rubros_proveedores') as any)
           .update({ nombre, descripcion })
           .eq('id', editingRubro.id);
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('rubros_proveedores')
+        const { error } = await (supabase
+          .from('rubros_proveedores') as any)
           .insert([{ nombre, descripcion }]);
         if (error) throw error;
       }

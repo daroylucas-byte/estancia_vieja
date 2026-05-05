@@ -55,12 +55,12 @@ export const useAuthStore = create<AuthState>((set) => ({
 
       if (userError) throw userError
       
-      if (userData && !userData.activo) {
+      if (userData && !(userData as any).activo) {
         await supabase.auth.signOut()
         throw new Error('Su cuenta está pendiente de aprobación por un administrador.')
       }
       
-      set({ user: userData, session: data.session, isLoading: false })
+      set({ user: userData as any, session: data.session, isLoading: false })
     } catch (error) {
       set({ isLoading: false })
       throw error

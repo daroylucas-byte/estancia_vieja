@@ -251,7 +251,7 @@ export const DashboardPage: React.FC = () => {
                   paddingAngle={8}
                   dataKey="value"
                 >
-                  {data.areaSpending.map((entry, index) => (
+                  {data.areaSpending.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -283,7 +283,7 @@ export const DashboardPage: React.FC = () => {
                     paddingAngle={8}
                     dataKey="value"
                   >
-                    {data.rubroSpending.map((entry, index) => (
+                    {data.rubroSpending.map((_, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[(index + 2) % COLORS.length]} />
                     ))}
                   </Pie>

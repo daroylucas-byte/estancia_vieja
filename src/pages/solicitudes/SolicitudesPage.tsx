@@ -4,15 +4,12 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { StatCard } from '@/components/ui/StatCard';
 import { formatCurrency, formatDate } from '@/utils/formatters';
-import { getColorEstadoSolicitud, getLabelEstado } from '@/utils/estados';
 
 import { supabase } from '@/lib/supabase';
-import { useAuthStore } from '@/stores/authStore';
 
 export const SolicitudesPage: React.FC = () => {
   const [solicitudes, setSolicitudes] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const { user } = useAuthStore();
 
   React.useEffect(() => {
     fetchSolicitudes();

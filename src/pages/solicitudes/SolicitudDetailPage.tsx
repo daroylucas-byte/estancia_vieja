@@ -1,7 +1,6 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { Modal } from '../../components/ui/Modal';
 import { Input } from '../../components/ui/Input';
@@ -55,6 +54,7 @@ export const SolicitudDetailPage: React.FC = () => {
   });
 
   const handleGeneratePlan = () => {
+    if (!compra) return;
     const cuotasCount = planConfig.cuotas;
     const montoCuota = Math.floor((compra.monto_total / cuotasCount) * 100) / 100;
     const plan = [];
@@ -92,6 +92,7 @@ export const SolicitudDetailPage: React.FC = () => {
   }, [id]);
 
   const fetchData = async () => {
+    if (!id) return;
     setLoading(true);
     try {
       // Fetch Solicitud con aprobador
@@ -785,7 +786,7 @@ export const SolicitudDetailPage: React.FC = () => {
                 // 2. Reject others
                 await (supabase.from('presupuestos') as any).update({ estado: 'rechazado' }).eq('solicitud_id', id).neq('id', budgetToApprove.id);
                 // 3. Create Compra record
-                const { data: cData, error: cErr } = await (supabase.from('compras') as any).insert({
+                const { error: cErr } = await (supabase.from('compras') as any).insert({
                   solicitud_id: id,
                   presupuesto_id: budgetToApprove.id,
                   registrado_por: user?.id,
@@ -847,7 +848,7 @@ export const SolicitudDetailPage: React.FC = () => {
 
             console.log('Subiendo archivo:', { fileName, contentType });
 
-            const { data: uploadData, error: uploadError } = await supabase.storage
+            const { error: uploadError } = await supabase.storage
               .from('presupuestos')
               .upload(fileName, newBudget.archivo, {
                 contentType: contentType,
@@ -933,7 +934,7 @@ export const SolicitudDetailPage: React.FC = () => {
               const fileExt = purchaseData.factura.name.split('.').pop()?.toLowerCase();
               const fileName = `factura-${id}-${Math.random()}.${fileExt}`;
 
-              const { data: uploadData, error: uploadError } = await supabase.storage
+              const { error: uploadError } = await supabase.storage
                 .from('presupuestos') // Reusing same bucket or you could create 'facturas'
                 .upload(fileName, purchaseData.factura, {
                   contentType: purchaseData.factura.type,
@@ -1131,7 +1132,7 @@ export const SolicitudDetailPage: React.FC = () => {
                 const fileExt = paymentConfirmData.comprobante.name.split('.').pop()?.toLowerCase();
                 const fileName = `pago-${selectedPago.id}-${Math.random()}.${fileExt}`;
 
-                const { data: uploadData, error: uploadError } = await supabase.storage
+                const { error: uploadError } = await supabase.storage
                   .from('presupuestos')
                   .upload(fileName, paymentConfirmData.comprobante, {
                     contentType: paymentConfirmData.comprobante.type,
@@ -1183,7 +1184,7 @@ export const SolicitudDetailPage: React.FC = () => {
                   compra_id: compra.id,
                   monto: montoPagadoReal,
                   signo: -1, // DEBE: reduce la deuda
-                  descripcion: `Pago ${diferencia > 0 ? 'Parcial' : 'Total'} Cuota ${selectedPago.numero_cuota} - Solicitud #${solicitud.numero_expediente || id.slice(0, 8)}`,
+                  descripcion: `Pago ${diferencia > 0 ? 'Parcial' : 'Total'} Cuota ${selectedPago.numero_cuota} - Solicitud #${solicitud.numero_expediente || (id || '').slice(0, 8)}`,
                   tipo_movimiento: diferencia > 0 ? 'pago_parcial' : 'pago_total',
                   numero_comprobante: `CUOTA-${selectedPago.numero_cuota}`,
                   fecha_comprobante: paymentConfirmData.fecha_pago_real,

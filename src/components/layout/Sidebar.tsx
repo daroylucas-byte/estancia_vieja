@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
-import { getRolLabel } from '@/utils/estados';
 
 const NAV_ITEMS = [
   { path: '/dashboard', label: 'Tablero', icon: 'dashboard' },
@@ -13,7 +12,7 @@ const NAV_ITEMS = [
 ];
 
 export const Sidebar: React.FC = () => {
-  const { logout, user } = useAuthStore();
+  const { logout } = useAuthStore();
 
   return (
     <aside className="fixed left-0 top-0 h-full w-[260px] bg-primary-container text-white flex flex-col py-6 px-4 shadow-xl border-r border-white/10 z-50">

@@ -1,0 +1,346 @@
+-- ============================================================
+--  SISTEMA DE COMPRAS MUNICIPAL
+--  Script de alteración: Proveedores + Cuenta Corriente
+--  Ejecutar DESPUÉS de compras_municipio_schema.sql
+--  Motor: PostgreSQL 14+
+-- ============================================================
+
+-- ============================================================
+--  ENUMS NUEVOS
+-- ============================================================
+
+CREATE TYPE tipo_movimiento_cc AS ENUM (
+    'factura',
+    'pago_parcial',
+    'pago_total',
+    'nota_credito',
+    'nota_debito',
+    'ajuste'
+);
+
+CREATE TYPE condicion_fiscal AS ENUM (
+    'responsable_inscripto',
+    'monotributista',
+    'exento',
+    'consumidor_final'
+);
+
+-- ============================================================
+--  TABLA: proveedores
+-- ============================================================
+
+CREATE TABLE proveedores (
+    id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    razon_social        VARCHAR(300) NOT NULL,
+    nombre_fantasia     VARCHAR(300),
+    cuit                VARCHAR(13) NOT NULL UNIQUE,       -- formato: XX-XXXXXXXX-X
+    condicion_fiscal    condicion_fiscal NOT NULL DEFAULT 'responsable_inscripto',
+    rubro               VARCHAR(150),
+    email               VARCHAR(255),
+    telefono            VARCHAR(50),
+    direccion           VARCHAR(300),
+    ciudad              VARCHAR(150),
+    provincia           VARCHAR(100) NOT NULL DEFAULT 'Córdoba',
+    codigo_postal       VARCHAR(10),
+    contacto_nombre     VARCHAR(200),                      -- persona de contacto
+    contacto_telefono   VARCHAR(50),
+    contacto_email      VARCHAR(255),
+    numero_cuenta_banco VARCHAR(50),                       -- CBU o alias para transferencias
+    banco               VARCHAR(150),
+    cbu                 VARCHAR(22),
+    alias_cbu           VARCHAR(100),
+    activo              BOOLEAN NOT NULL DEFAULT TRUE,
+    inhabilitado        BOOLEAN NOT NULL DEFAULT FALSE,    -- inhabilitado para contratar con el municipio
+    motivo_inhabilitacion TEXT,
+    observaciones       TEXT,
+    created_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT chk_cuit_formato CHECK (cuit ~ '^\d{2}-\d{8}-\d{1}$')
+);
+
+COMMENT ON TABLE proveedores IS 'Registro de proveedores habilitados para contratar con el municipio';
+COMMENT ON COLUMN proveedores.inhabilitado IS 'TRUE bloquea al proveedor para nuevos presupuestos y compras';
+COMMENT ON COLUMN proveedores.cbu IS 'CBU de 22 dígitos para transferencias bancarias';
+
+CREATE INDEX idx_proveedores_cuit       ON proveedores(cuit);
+CREATE INDEX idx_proveedores_razon      ON proveedores(razon_social);
+CREATE INDEX idx_proveedores_activo     ON proveedores(activo);
+CREATE INDEX idx_proveedores_inhabilitado ON proveedores(inhabilitado);
+
+-- Trigger updated_at
+CREATE TRIGGER trg_updated_at_proveedores
+    BEFORE UPDATE ON proveedores
+    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+
+-- ============================================================
+--  ALTERAR TABLA: presupuestos
+--  Reemplazar el campo texto "proveedor" por FK a proveedores
+-- ============================================================
+
+-- 1. Agregar la columna FK (nullable primero para no romper datos existentes)
+ALTER TABLE presupuestos
+    ADD COLUMN proveedor_id UUID REFERENCES proveedores(id) ON DELETE RESTRICT;
+
+-- 2. Si ya tenías datos, acá migrarías el texto al ID correspondiente.
+--    Ejemplo (ejecutar manualmente si hay datos previos):
+--    UPDATE presupuestos p
+--    SET proveedor_id = pv.id
+--    FROM proveedores pv
+--    WHERE pv.razon_social = p.proveedor;
+
+-- 3. Una vez migrados los datos, hacer obligatoria la FK y eliminar la columna texto:
+--    ALTER TABLE presupuestos ALTER COLUMN proveedor_id SET NOT NULL;
+--    ALTER TABLE presupuestos DROP COLUMN proveedor;
+
+-- NOTA: Si es una base nueva sin datos, ejecutar directamente:
+ALTER TABLE presupuestos DROP COLUMN IF EXISTS proveedor;
+ALTER TABLE presupuestos ALTER COLUMN proveedor_id SET NOT NULL;
+
+COMMENT ON COLUMN presupuestos.proveedor_id IS 'FK al proveedor que presentó esta cotización';
+
+CREATE INDEX idx_presupuestos_proveedor ON presupuestos(proveedor_id);
+
+-- ============================================================
+--  TABLA: cuenta_corriente_proveedores
+-- ============================================================
+
+CREATE TABLE cuenta_corriente_proveedores (
+    id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    proveedor_id    UUID NOT NULL REFERENCES proveedores(id) ON DELETE RESTRICT,
+    compra_id       UUID REFERENCES compras(id) ON DELETE SET NULL,
+    cuota_id        UUID REFERENCES cuotas(id) ON DELETE SET NULL,
+    tipo_movimiento tipo_movimiento_cc NOT NULL,
+    monto           NUMERIC(15, 2) NOT NULL,               -- siempre positivo; el tipo define el signo
+    signo           SMALLINT NOT NULL CHECK (signo IN (-1, 1)),
+    -- signo = 1  → aumenta la deuda (factura, nota_debito)
+    -- signo = -1 → reduce la deuda  (pago, nota_credito, ajuste positivo)
+    saldo_parcial   NUMERIC(15, 2),                        -- saldo acumulado hasta este movimiento (calculado)
+    numero_comprobante VARCHAR(100),                       -- número de factura / recibo / NC
+    fecha_comprobante  DATE NOT NULL DEFAULT CURRENT_DATE,
+    descripcion     TEXT,
+    archivo_url     VARCHAR(500),                          -- comprobante escaneado
+    registrado_por  UUID NOT NULL REFERENCES usuarios(id) ON DELETE RESTRICT,
+    created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE cuenta_corriente_proveedores IS 'Movimientos de cuenta corriente por proveedor. Cada fila es un débito o crédito';
+COMMENT ON COLUMN cuenta_corriente_proveedores.signo IS '1 = aumenta deuda (factura/ND), -1 = reduce deuda (pago/NC)';
+COMMENT ON COLUMN cuenta_corriente_proveedores.saldo_parcial IS 'Saldo acumulado del proveedor hasta e incluyendo este movimiento';
+
+CREATE INDEX idx_cc_proveedor    ON cuenta_corriente_proveedores(proveedor_id);
+CREATE INDEX idx_cc_compra       ON cuenta_corriente_proveedores(compra_id);
+CREATE INDEX idx_cc_cuota        ON cuenta_corriente_proveedores(cuota_id);
+CREATE INDEX idx_cc_tipo         ON cuenta_corriente_proveedores(tipo_movimiento);
+CREATE INDEX idx_cc_fecha        ON cuenta_corriente_proveedores(fecha_comprobante DESC);
+
+-- Trigger updated_at
+CREATE TRIGGER trg_updated_at_cc
+    BEFORE UPDATE ON cuenta_corriente_proveedores
+    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+
+-- ============================================================
+--  FUNCIÓN: calcular saldo_parcial al insertar en cuenta corriente
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION fn_calcular_saldo_parcial_cc()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_saldo_anterior NUMERIC(15,2);
+BEGIN
+    -- Obtener el saldo del último movimiento del mismo proveedor
+    SELECT COALESCE(saldo_parcial, 0)
+    INTO v_saldo_anterior
+    FROM cuenta_corriente_proveedores
+    WHERE proveedor_id = NEW.proveedor_id
+      AND id <> NEW.id
+    ORDER BY created_at DESC
+    LIMIT 1;
+
+    -- Calcular nuevo saldo: deuda aumenta con signo +1, baja con signo -1
+    NEW.saldo_parcial := v_saldo_anterior + (NEW.monto * NEW.signo);
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_saldo_parcial_cc
+    BEFORE INSERT ON cuenta_corriente_proveedores
+    FOR EACH ROW EXECUTE FUNCTION fn_calcular_saldo_parcial_cc();
+
+-- ============================================================
+--  FUNCIÓN: registrar movimiento en CC al pagar una cuota
+--  Se dispara automáticamente cuando se marca una cuota como pagada
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION fn_cc_movimiento_por_cuota()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_proveedor_id  UUID;
+    v_compra_id     UUID;
+    v_tipo          tipo_movimiento_cc;
+    v_total_cuotas  INT;
+    v_cuotas_pagadas INT;
+BEGIN
+    -- Solo actuar cuando cambia el estado de pagado
+    IF OLD.pagado = NEW.pagado THEN
+        RETURN NEW;
+    END IF;
+
+    -- Obtener proveedor y compra a través del plan de pago → compra → presupuesto
+    SELECT c.id, p.proveedor_id
+    INTO v_compra_id, v_proveedor_id
+    FROM planes_pago pp
+    JOIN compras     c ON c.id = pp.compra_id
+    JOIN presupuestos p ON p.id = c.presupuesto_id
+    WHERE pp.id = NEW.plan_pago_id;
+
+    -- Determinar si es pago parcial o total
+    SELECT COUNT(*) INTO v_total_cuotas
+    FROM cuotas WHERE plan_pago_id = NEW.plan_pago_id;
+
+    SELECT COUNT(*) FILTER (WHERE pagado = TRUE) INTO v_cuotas_pagadas
+    FROM cuotas WHERE plan_pago_id = NEW.plan_pago_id;
+
+    IF NEW.pagado = TRUE THEN
+        -- Cuota marcada como pagada → crédito (reduce deuda)
+        v_tipo := CASE
+            WHEN v_cuotas_pagadas >= v_total_cuotas THEN 'pago_total'
+            ELSE 'pago_parcial'
+        END;
+
+        INSERT INTO cuenta_corriente_proveedores (
+            proveedor_id, compra_id, cuota_id,
+            tipo_movimiento, monto, signo,
+            fecha_comprobante, descripcion,
+            registrado_por
+        ) VALUES (
+            v_proveedor_id, v_compra_id, NEW.id,
+            v_tipo, NEW.monto, -1,
+            COALESCE(NEW.fecha_pago_real, CURRENT_DATE),
+            'Pago cuota ' || NEW.numero_cuota,
+            COALESCE(NEW.registrado_por, (SELECT id FROM usuarios WHERE rol = 'compras' LIMIT 1))
+        );
+
+    ELSE
+        -- Cuota desmarcada → revertir el pago (débito)
+        INSERT INTO cuenta_corriente_proveedores (
+            proveedor_id, compra_id, cuota_id,
+            tipo_movimiento, monto, signo,
+            fecha_comprobante, descripcion,
+            registrado_por
+        ) VALUES (
+            v_proveedor_id, v_compra_id, NEW.id,
+            'ajuste', NEW.monto, 1,
+            CURRENT_DATE,
+            'Reversión pago cuota ' || NEW.numero_cuota,
+            COALESCE(NEW.registrado_por, (SELECT id FROM usuarios WHERE rol = 'compras' LIMIT 1))
+        );
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_cc_movimiento_por_cuota
+    AFTER UPDATE OF pagado ON cuotas
+    FOR EACH ROW EXECUTE FUNCTION fn_cc_movimiento_por_cuota();
+
+-- ============================================================
+--  FUNCIÓN: registrar factura en CC al crear una compra
+--  Cuando se registra una compra aprobada, genera el débito inicial
+-- ============================================================
+
+CREATE OR REPLACE FUNCTION fn_cc_debito_por_compra()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_proveedor_id UUID;
+BEGIN
+    SELECT proveedor_id INTO v_proveedor_id
+    FROM presupuestos
+    WHERE id = NEW.presupuesto_id;
+
+    INSERT INTO cuenta_corriente_proveedores (
+        proveedor_id, compra_id,
+        tipo_movimiento, monto, signo,
+        fecha_comprobante, descripcion,
+        registrado_por
+    ) VALUES (
+        v_proveedor_id, NEW.id,
+        'factura', NEW.monto_total, 1,
+        CURRENT_DATE,
+        'Compra registrada',
+        NEW.registrado_por
+    );
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_cc_debito_por_compra
+    AFTER INSERT ON compras
+    FOR EACH ROW EXECUTE FUNCTION fn_cc_debito_por_compra();
+
+-- ============================================================
+--  VISTAS NUEVAS
+-- ============================================================
+
+-- Vista: saldo actual por proveedor
+CREATE VIEW v_saldo_proveedores AS
+SELECT
+    p.id                                AS proveedor_id,
+    p.razon_social,
+    p.cuit,
+    p.activo,
+    p.inhabilitado,
+    COUNT(DISTINCT c.compra_id)         AS cantidad_compras,
+    COALESCE(SUM(c.monto * c.signo), 0) AS saldo_total,       -- positivo = nos debe / negativo = les debemos
+    MAX(c.created_at)                   AS ultimo_movimiento
+FROM proveedores p
+LEFT JOIN cuenta_corriente_proveedores c ON c.proveedor_id = p.id
+GROUP BY p.id, p.razon_social, p.cuit, p.activo, p.inhabilitado;
+
+COMMENT ON VIEW v_saldo_proveedores IS 'Saldo consolidado de cuenta corriente por proveedor. Positivo = deuda del municipio hacia el proveedor';
+
+-- Vista: detalle de movimientos con info de compra y proveedor
+CREATE VIEW v_cuenta_corriente_detalle AS
+SELECT
+    cc.id,
+    cc.fecha_comprobante,
+    cc.tipo_movimiento,
+    cc.monto,
+    cc.signo,
+    cc.saldo_parcial,
+    cc.numero_comprobante,
+    cc.descripcion,
+    p.razon_social          AS proveedor,
+    p.cuit,
+    s.titulo                AS solicitud,
+    a.nombre                AS area,
+    cc.compra_id,
+    cc.cuota_id,
+    cc.created_at
+FROM cuenta_corriente_proveedores cc
+JOIN proveedores  p ON p.id = cc.proveedor_id
+LEFT JOIN compras co ON co.id = cc.compra_id
+LEFT JOIN solicitudes s ON s.id = co.solicitud_id
+LEFT JOIN areas   a ON a.id = s.area_id
+ORDER BY cc.proveedor_id, cc.created_at DESC;
+
+-- Vista: proveedores con deuda pendiente (saldo > 0)
+CREATE VIEW v_proveedores_con_deuda AS
+SELECT *
+FROM v_saldo_proveedores
+WHERE saldo_total > 0
+ORDER BY saldo_total DESC;
+
+-- ============================================================
+--  DATOS DE EJEMPLO: proveedores
+-- ============================================================
+
+INSERT INTO proveedores (razon_social, nombre_fantasia, cuit, condicion_fiscal, rubro, email, telefono, provincia) VALUES
+    ('Distribuidora Norte S.R.L.',   'DistNorte',     '30-71234567-8', 'responsable_inscripto', 'Insumos de oficina',   'ventas@distnorte.com.ar',   '0351-4123456', 'Córdoba'),
+    ('Tech Solutions S.A.',           'TechSol',       '30-68901234-5', 'responsable_inscripto', 'Tecnología',           'comercial@techsol.com.ar',  '0351-4567890', 'Córdoba'),
+    ('Construcciones Municipales S.A.','ConstMuni',    '30-55678901-2', 'responsable_inscripto', 'Construcción y obras', 'info@constmuni.com.ar',     '0351-4890123', 'Córdoba'),
+    ('Imprenta Regional S.R.L.',      'ImpReg',        '30-44123456-7', 'monotributista',        'Imprenta y gráfica',   'pedidos@impreg.com.ar',     '0351-4234567', 'Córdoba');

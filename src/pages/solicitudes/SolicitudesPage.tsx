@@ -117,7 +117,7 @@ export const SolicitudesPage: React.FC = () => {
             Gestione y supervise las solicitudes de compra de la administración central.
           </p>
         </div>
-        {(currentUser?.rol === 'area' || currentUser?.rol === 'compras' || currentUser?.rol === 'admin') && (
+        {(currentUser?.rol === 'area' || currentUser?.rol === 'compras' || (currentUser?.rol as any) === 'admin') && (
           <Link to="/solicitudes/nueva">
             <Button size="lg" leftIcon="add_circle">
               NUEVA SOLICITUD

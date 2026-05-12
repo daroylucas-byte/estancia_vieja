@@ -5,7 +5,7 @@ interface StatCardProps {
   value: string | number;
   icon: string;
   badge?: string;
-  variant?: 'primary' | 'warning' | 'success';
+  variant?: 'primary' | 'warning' | 'success' | 'error';
 }
 
 export const StatCard: React.FC<StatCardProps> = ({ 
@@ -36,6 +36,13 @@ export const StatCard: React.FC<StatCardProps> = ({
       border: 'hover:border-green-600/30',
       badgeBg: 'bg-green-50',
       badgeText: 'text-green-600'
+    },
+    error: {
+      iconBg: 'bg-rose-50',
+      iconColor: 'text-rose-600',
+      border: 'hover:border-rose-600/30',
+      badgeBg: 'bg-rose-50',
+      badgeText: 'text-rose-600'
     }
   };
 

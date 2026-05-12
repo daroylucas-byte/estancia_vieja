@@ -338,7 +338,7 @@ export const SolicitudDetailPage: React.FC = () => {
       </div>
 
       {/* Action Panel for "Pendiente" */}
-      {solicitud.estado === 'pendiente' && (user?.rol === 'compras' || user?.rol === 'jefa_comunal' || user?.rol === 'admin') && (
+      {solicitud.estado === 'pendiente' && (user?.rol === 'compras' || user?.rol === 'jefa_comunal' || (user?.rol as any) === 'admin') && (
         <div className="bg-gradient-to-r from-primary/10 to-transparent border-l-4 border-l-primary p-6 rounded-r-2xl animate-in slide-in-from-left duration-500 shadow-sm">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
@@ -423,7 +423,7 @@ export const SolicitudDetailPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-4">
                 <span className="text-[10px] font-black text-primary bg-primary/10 px-3 py-1 rounded-full">{presupuestos.length} OFERTAS</span>
-                {(solicitud.estado === 'aprobada' && (user?.rol === 'compras' || user?.rol === 'admin')) && (
+                {(solicitud?.estado === 'aprobada' && ((user?.rol as any) === 'compras' || (user?.rol as any) === 'admin')) && (
                   <Button size="sm" leftIcon="add" onClick={() => setIsModalOpen(true)}>Agregar Presupuesto</Button>
                 )}
               </div>
@@ -473,7 +473,7 @@ export const SolicitudDetailPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         {p.estado === 'pendiente' && solicitud.estado === 'pendiente_aprobacion_presupuestos' && !presupuestos.some(x => x.estado === 'aprobado') ? (
-                          (user?.rol === 'compras' || user?.rol === 'admin') ? (
+                          ((user?.rol as any) === 'compras' || (user?.rol as any) === 'admin') ? (
                             <Button size="sm" onClick={() => {
                               setBudgetToApprove(p);
                               setIsConfigModalOpen(true);
@@ -518,7 +518,7 @@ export const SolicitudDetailPage: React.FC = () => {
                       <Button
                         size="sm"
                         className="w-full"
-                        disabled={user?.rol !== 'jefa_comunal' && user?.rol !== 'admin'}
+                        disabled={user?.rol !== 'jefa_comunal' && (user?.rol as any) !== 'admin'}
                         onClick={async () => {
                           const updateData: any = { 
                             aprobado_jefa: true, 
@@ -552,7 +552,7 @@ export const SolicitudDetailPage: React.FC = () => {
                           <Button 
                             size="sm" 
                             className="w-full" 
-                            disabled={!compra.aprobado_jefa || (user?.rol !== 'tribunal_cuentas' && user?.rol !== 'admin')}
+                            disabled={!compra.aprobado_jefa || (user?.rol !== 'tribunal_cuentas' && (user?.rol as any) !== 'admin')}
                             onClick={async () => {
                               await (supabase.from('compras') as any).update({ 
                                 aprobado_tribunal: true, 
@@ -589,7 +589,7 @@ export const SolicitudDetailPage: React.FC = () => {
                 <Button
                   className="w-full"
                   leftIcon="app_registration"
-                  disabled={user?.rol !== 'compras' && user?.rol !== 'admin'}
+                  disabled={user?.rol !== 'compras' && (user?.rol as any) !== 'admin'}
                   onClick={() => setIsPurchaseModalOpen(true)}
                 >
                   REGISTRAR COMPRA
@@ -681,7 +681,7 @@ export const SolicitudDetailPage: React.FC = () => {
                   Plan de Pagos
                 </h3>
                 {compra?.fecha_compra && pagos.length === 0 && (
-                  <Button size="sm" leftIcon="auto_mode" disabled={user?.rol !== 'compras' && user?.rol !== 'admin'} onClick={() => setIsPlanModalOpen(true)}>Generar Plan</Button>
+                  <Button size="sm" leftIcon="auto_mode" disabled={user?.rol !== 'compras' && (user?.rol as any) !== 'admin'} onClick={() => setIsPlanModalOpen(true)}>Generar Plan</Button>
                 )}
               </div>
 
@@ -777,7 +777,7 @@ export const SolicitudDetailPage: React.FC = () => {
                                     }
                                   }}
                                   className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline disabled:opacity-30"
-                                  disabled={user?.rol !== 'tesorero' && user?.rol !== 'admin'}
+                                  disabled={(user?.rol as any) !== 'tesorero' && (user?.rol as any) !== 'admin'}
                                 >
                                   {p.estado === 'pagado' ? 'ANULAR' : 'MARCAR PAGO'}
                                 </button>

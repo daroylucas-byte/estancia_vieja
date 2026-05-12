@@ -56,7 +56,7 @@ export const ProveedoresPage: React.FC = () => {
             Gestión de empresas y particulares habilitados para contratar.
           </p>
         </div>
-        {(user?.rol === 'compras' || user?.rol === 'admin') && (
+        {((user?.rol as any) === 'compras' || (user?.rol as any) === 'admin') && (
           <Link to="/proveedores/nuevo">
             <Button size="lg" leftIcon="person_add">
               NUEVO PROVEEDOR
@@ -132,7 +132,7 @@ export const ProveedoresPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
-                          {(user?.rol === 'compras' || user?.rol === 'admin') && (
+                          {((user?.rol as any) === 'compras' || (user?.rol as any) === 'admin') && (
                             <button className="p-2 text-slate-400 hover:text-primary transition-colors hover:bg-primary/5 rounded-lg">
                               <span className="material-symbols-outlined text-xl">edit</span>
                             </button>

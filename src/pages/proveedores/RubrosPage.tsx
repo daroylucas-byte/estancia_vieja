@@ -109,7 +109,7 @@ export const RubrosPage: React.FC = () => {
             Administre las categorías de rubros para la clasificación de proveedores.
           </p>
         </div>
-        {(user?.rol === 'compras' || user?.rol === 'jefa_comunal' || user?.rol === 'admin') && (
+        {(user?.rol === 'compras' || user?.rol === 'jefa_comunal' || (user?.rol as any) === 'admin') && (
           <Button leftIcon="add_circle" onClick={() => handleOpenModal()}>
             NUEVO RUBRO
           </Button>
@@ -154,7 +154,7 @@ export const RubrosPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
-                        {(user?.rol === 'compras' || user?.rol === 'jefa_comunal' || user?.rol === 'admin') && (
+                        {(user?.rol === 'compras' || user?.rol === 'jefa_comunal' || (user?.rol as any) === 'admin') && (
                           <>
                             <button
                               onClick={() => handleOpenModal(rubro)}

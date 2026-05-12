@@ -25,9 +25,9 @@ export const LoginPage: React.FC = () => {
   const handleDemo = () => {
     loginDemo();
     const user = useAuthStore.getState().user;
-    if (user?.rol === 'area' || user?.rol === 'tribunal_cuentas') {
+    if (user?.rol === 'area' || user?.rol === 'tribunal_cuentas' || (user?.rol as any) === 'admin') {
       navigate('/solicitudes');
-    } else if (user?.rol === 'tesorero') {
+    } else if ((user?.rol as any) === 'tesorero') {
       navigate('/tesoreria');
     } else {
       navigate('/dashboard');
@@ -49,9 +49,9 @@ export const LoginPage: React.FC = () => {
       const user = useAuthStore.getState().user;
       
       // Redirección basada en rol
-      if (user?.rol === 'area' || user?.rol === 'tribunal_cuentas') {
+      if (user?.rol === 'area' || user?.rol === 'tribunal_cuentas' || (user?.rol as any) === 'admin') {
         navigate('/solicitudes');
-      } else if (user?.rol === 'tesorero') {
+      } else if ((user?.rol as any) === 'tesorero') {
         navigate('/tesoreria');
       } else {
         navigate('/dashboard');

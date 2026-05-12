@@ -16,14 +16,19 @@ export const DevRolSwitcher: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
 
-  if (!import.meta.env.DEV) return null;
-  if (!user || user.id === 'demo-user-id') return null;
+  if (!user) return null;
 
   const currentRol = ROLES.find(r => r.value === user.rol);
 
   const cambiarRol = async (nuevoRol: string) => {
     setLoading(true);
     try {
+      if (user.id === 'demo-user-id') {
+        useAuthStore.setState({ user: { ...user, rol: nuevoRol as any } });
+        setOpen(false);
+        return;
+      }
+      
       // 1. Actualizar rol en public.usuarios (el trigger sincroniza a app_metadata)
       await (supabase
         .from('usuarios') as any)

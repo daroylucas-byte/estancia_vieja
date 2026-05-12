@@ -122,7 +122,7 @@ export const ProveedorDetailPage: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-          {(user?.rol === 'compras' || user?.rol === 'admin') && (
+          {(user?.rol === 'compras' || (user?.rol as any) === 'admin') && (
             <Button variant="secondary" leftIcon="edit">EDITAR</Button>
           )}
           <Button leftIcon="print">RESUMEN</Button>
@@ -175,7 +175,7 @@ export const ProveedorDetailPage: React.FC = () => {
           </h3>
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" leftIcon="filter_list">Filtrar</Button>
-            {(user?.rol === 'compras' || user?.rol === 'tesorero' || user?.rol === 'admin') && (
+            {(user?.rol === 'compras' || (user?.rol as any) === 'tesorero' || (user?.rol as any) === 'admin') && (
               <Button size="sm" leftIcon="add">Nuevo Movimiento</Button>
             )}
           </div>

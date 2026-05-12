@@ -122,7 +122,7 @@ export const TesoreriaPage: React.FC = () => {
                     {formatCurrency(p.monto)}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <Badge variant={p.estado === 'pagado' ? 'success' : 'warning'}>
+                    <Badge variant={p.estado === 'pagado' ? 'success' : 'info'}>
                       {p.estado.toUpperCase()}
                     </Badge>
                   </td>

@@ -24,7 +24,14 @@ export const LoginPage: React.FC = () => {
 
   const handleDemo = () => {
     loginDemo();
-    navigate('/dashboard');
+    const user = useAuthStore.getState().user;
+    if (user?.rol === 'area' || user?.rol === 'tribunal_cuentas') {
+      navigate('/solicitudes');
+    } else if (user?.rol === 'tesorero') {
+      navigate('/tesoreria');
+    } else {
+      navigate('/dashboard');
+    }
   };
 
   const {
@@ -39,7 +46,16 @@ export const LoginPage: React.FC = () => {
     setError(null);
     try {
       await login(data.email, data.password);
-      navigate('/dashboard');
+      const user = useAuthStore.getState().user;
+      
+      // Redirección basada en rol
+      if (user?.rol === 'area' || user?.rol === 'tribunal_cuentas') {
+        navigate('/solicitudes');
+      } else if (user?.rol === 'tesorero') {
+        navigate('/tesoreria');
+      } else {
+        navigate('/dashboard');
+      }
     } catch (err: any) {
       setError(err.message || 'Error al iniciar sesión');
     }

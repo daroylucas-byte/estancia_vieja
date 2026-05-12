@@ -141,16 +141,15 @@ export const CreateSolicitudPage: React.FC = () => {
               {...register('prioridad')}
             />
 
-            {!user?.area_id && (
-              <Select
-                label="Área Solicitante"
-                required
-                value={selectedAreaId || ''}
-                onChange={(e) => setSelectedAreaId(e.target.value)}
-                options={areas.map(a => ({ value: a.id, label: a.nombre }))}
-                placeholder="Seleccione el área..."
-              />
-            )}
+            <Select
+              label="Área Solicitante"
+              required
+              value={user?.rol === 'area' ? user.area_id : (selectedAreaId || '')}
+              onChange={(e) => setSelectedAreaId(e.target.value)}
+              options={areas.map(a => ({ value: a.id, label: a.nombre }))}
+              placeholder="Seleccione el área..."
+              disabled={user?.rol === 'area'}
+            />
           </div>
 
           <div className="space-y-2">

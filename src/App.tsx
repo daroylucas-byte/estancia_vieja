@@ -3,17 +3,20 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { LoginPage } from '@/pages/auth/LoginPage';
 import { RegisterPage } from '@/pages/auth/RegisterPage';
+import { UnauthorizedPage } from '@/pages/auth/UnauthorizedPage';
 import { DashboardPage } from '@/pages/dashboard/DashboardPage';
 import { SolicitudesPage } from '@/pages/solicitudes/SolicitudesPage';
 import { SolicitudDetailPage } from '@/pages/solicitudes/SolicitudDetailPage';
 import { CreateSolicitudPage } from '@/pages/solicitudes/CreateSolicitudPage';
+import { TesoreriaPage } from '@/pages/tesoreria/TesoreriaPage';
 import { ProveedoresPage } from '@/pages/proveedores/ProveedoresPage';
 import { CreateProveedorPage } from '@/pages/proveedores/CreateProveedorPage';
 import { ProveedorDetailPage } from '@/pages/proveedores/ProveedorDetailPage';
 import { RubrosPage } from '@/pages/proveedores/RubrosPage';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { DevRolSwitcher } from '@/components/dev/DevRolSwitcher';
 
-const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
+const ProtectedRoute = ({ children, roles }: { children: React.ReactNode, roles?: string[] }) => {
   const { user, isLoading } = useAuthStore();
 
   if (isLoading) {
@@ -26,6 +29,10 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (roles && !roles.includes(user.rol)) {
+    return <Navigate to="/unauthorized" replace />;
   }
 
   return <AppLayout>{children}</AppLayout>;
@@ -44,12 +51,13 @@ function App() {
         {/* Public Routes */}
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/unauthorized" element={<UnauthorizedPage />} />
         
         {/* Protected Routes */}
         <Route 
           path="/dashboard" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['admin', 'compras', 'jefa_comunal', 'area']}>
               <DashboardPage />
             </ProtectedRoute>
           } 
@@ -58,7 +66,7 @@ function App() {
         <Route 
           path="/solicitudes" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['admin', 'compras', 'jefa_comunal', 'area', 'tribunal_cuentas', 'tesorero']}>
               <SolicitudesPage />
             </ProtectedRoute>
           } 
@@ -66,7 +74,7 @@ function App() {
         <Route 
           path="/solicitudes/:id" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['admin', 'compras', 'jefa_comunal', 'area', 'tribunal_cuentas', 'tesorero']}>
               <SolicitudDetailPage />
             </ProtectedRoute>
           } 
@@ -74,8 +82,17 @@ function App() {
         <Route 
           path="/solicitudes/nueva" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['admin', 'compras', 'area']}>
               <CreateSolicitudPage />
+            </ProtectedRoute>
+          } 
+        />
+
+        <Route 
+          path="/tesoreria" 
+          element={
+            <ProtectedRoute roles={['admin', 'tesorero', 'compras']}>
+              <TesoreriaPage />
             </ProtectedRoute>
           } 
         />
@@ -84,7 +101,7 @@ function App() {
         <Route 
           path="/proveedores" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['admin', 'compras', 'jefa_comunal', 'area']}>
               <ProveedoresPage />
             </ProtectedRoute>
           } 
@@ -92,7 +109,7 @@ function App() {
         <Route 
           path="/proveedores/nuevo" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['admin', 'compras']}>
               <CreateProveedorPage />
             </ProtectedRoute>
           } 
@@ -100,7 +117,7 @@ function App() {
         <Route 
           path="/proveedores/rubros" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['admin', 'compras', 'jefa_comunal']}>
               <RubrosPage />
             </ProtectedRoute>
           } 
@@ -108,22 +125,23 @@ function App() {
         <Route 
           path="/proveedores/:id" 
           element={
-            <ProtectedRoute>
+            <ProtectedRoute roles={['admin', 'compras', 'jefa_comunal', 'area']}>
               <ProveedorDetailPage />
             </ProtectedRoute>
           } 
         />
 
         {/* Others */}
-        <Route path="/licitaciones" element={<ProtectedRoute><div className="text-h1">Página de Licitaciones</div></ProtectedRoute>} />
-        <Route path="/configuracion" element={<ProtectedRoute><div className="text-h1">Página de Configuración</div></ProtectedRoute>} />
+        <Route path="/licitaciones" element={<ProtectedRoute roles={['admin', 'compras', 'jefa_comunal']}><div className="text-h1">Página de Licitaciones</div></ProtectedRoute>} />
+        <Route path="/configuracion" element={<ProtectedRoute roles={['admin']}><div className="text-h1">Página de Configuración</div></ProtectedRoute>} />
 
         {/* Default Route */}
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        
+
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
+      <DevRolSwitcher />
     </BrowserRouter>
   );
 }

@@ -3,16 +3,21 @@ import { NavLink } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 
 const NAV_ITEMS = [
-  { path: '/dashboard', label: 'Tablero', icon: 'dashboard' },
-  { path: '/solicitudes', label: 'Expedientes', icon: 'description' },
-  { path: '/proveedores', label: 'Proveedores', icon: 'group' },
-  { path: '/proveedores/rubros', label: 'Rubros', icon: 'category' },
-  { path: '/licitaciones', label: 'Licitaciones', icon: 'gavel' },
-  { path: '/configuracion', label: 'Configuración', icon: 'settings' },
+  { path: '/dashboard', label: 'Tablero', icon: 'dashboard', roles: ['admin', 'compras', 'jefa_comunal', 'area'] },
+  { path: '/solicitudes', label: 'Expedientes', icon: 'description', roles: ['admin', 'compras', 'jefa_comunal', 'area', 'tribunal_cuentas', 'tesorero'] },
+  { path: '/tesoreria', label: 'Tesorería', icon: 'payments', roles: ['admin', 'tesorero', 'compras'] },
+  { path: '/proveedores', label: 'Proveedores', icon: 'group', roles: ['admin', 'compras', 'jefa_comunal', 'area'] },
+  { path: '/proveedores/rubros', label: 'Rubros', icon: 'category', roles: ['admin', 'compras', 'jefa_comunal'] },
+  { path: '/licitaciones', label: 'Licitaciones', icon: 'gavel', roles: ['admin', 'compras', 'jefa_comunal'] },
+  { path: '/configuracion', label: 'Configuración', icon: 'settings', roles: ['admin'] },
 ];
 
 export const Sidebar: React.FC = () => {
-  const { logout } = useAuthStore();
+  const { user, logout } = useAuthStore();
+
+  const filteredItems = NAV_ITEMS.filter(item => 
+    !item.roles || (user?.rol && item.roles.includes(user.rol))
+  );
 
   return (
     <aside className="fixed left-0 top-0 h-full w-[260px] bg-primary-container text-white flex flex-col py-6 px-4 shadow-xl border-r border-white/10 z-50">
@@ -29,7 +34,7 @@ export const Sidebar: React.FC = () => {
       </div>
 
       <nav className="flex-1 space-y-1">
-        {NAV_ITEMS.map((item) => (
+        {filteredItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 import type { Database } from '@/lib/database.types';
 
 type Proveedor = Database['public']['Tables']['proveedores']['Row'] & {
@@ -10,6 +11,7 @@ type Proveedor = Database['public']['Tables']['proveedores']['Row'] & {
 };
 
 export const ProveedoresPage: React.FC = () => {
+  const { user } = useAuthStore();
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -54,11 +56,13 @@ export const ProveedoresPage: React.FC = () => {
             Gestión de empresas y particulares habilitados para contratar.
           </p>
         </div>
-        <Link to="/proveedores/nuevo">
-          <Button size="lg" leftIcon="person_add">
-            NUEVO PROVEEDOR
-          </Button>
-        </Link>
+        {(user?.rol === 'compras' || user?.rol === 'admin') && (
+          <Link to="/proveedores/nuevo">
+            <Button size="lg" leftIcon="person_add">
+              NUEVO PROVEEDOR
+            </Button>
+          </Link>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-[#e0e4e8] overflow-hidden shadow-sm">
@@ -128,9 +132,11 @@ export const ProveedoresPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
-                          <button className="p-2 text-slate-400 hover:text-primary transition-colors hover:bg-primary/5 rounded-lg">
-                            <span className="material-symbols-outlined text-xl">edit</span>
-                          </button>
+                          {(user?.rol === 'compras' || user?.rol === 'admin') && (
+                            <button className="p-2 text-slate-400 hover:text-primary transition-colors hover:bg-primary/5 rounded-lg">
+                              <span className="material-symbols-outlined text-xl">edit</span>
+                            </button>
+                          )}
                           <Link 
                             to={`/proveedores/${prov.id}`}
                             className="p-2 text-slate-400 hover:text-primary transition-colors hover:bg-primary/5 rounded-lg"

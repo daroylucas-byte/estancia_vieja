@@ -15,6 +15,7 @@ export const SolicitudDetailPage: React.FC = () => {
   const { user } = useAuthStore();
 
   const [loading, setLoading] = React.useState(true);
+  const [accessDenied, setAccessDenied] = React.useState(false);
   const [solicitud, setSolicitud] = React.useState<any>(null);
   const [presupuestos, setPresupuestos] = React.useState<any[]>([]);
   const [compra, setCompra] = React.useState<any>(null);
@@ -135,6 +136,7 @@ export const SolicitudDetailPage: React.FC = () => {
       }
     } catch (err: any) {
       console.error('Error fetching data:', err.message);
+      if (err.code === 'PGRST116' || err.code === '406') setAccessDenied(true);
     } finally {
       setLoading(false);
     }
@@ -170,8 +172,17 @@ export const SolicitudDetailPage: React.FC = () => {
     }
   };
 
-  if (loading || !solicitud) {
+  if (loading) {
     return <div className="flex items-center justify-center min-h-[400px]">Cargando expediente...</div>;
+  }
+
+  if (accessDenied || !solicitud) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-3 text-slate-400">
+        <span className="material-symbols-outlined text-5xl">lock</span>
+        <p className="text-sm font-bold">No tenés acceso a este expediente.</p>
+      </div>
+    );
   }
 
   // Determine current step for the visual indicator
@@ -189,9 +200,12 @@ export const SolicitudDetailPage: React.FC = () => {
   if (solicitud.estado === 'pendiente_aprobacion_presupuestos') currentStep = 4;
   if (presupuestos.some(p => p.estado === 'aprobado')) currentStep = 5;
   if (compra) {
-    if (compra.aprobado_jefa) currentStep = 7; // Ya pasó por Tribunal e Intendente
-    else if (compra.aprobado_tribunal || !compra.requiere_tribunal) currentStep = 6; // En proceso de firma Intendente
-    else currentStep = 5; // Esperando Tribunal
+    const tribunalDone = compra.aprobado_tribunal || !compra.requiere_tribunal;
+    const jefaDone = compra.aprobado_jefa;
+
+    if (jefaDone && tribunalDone) currentStep = 7;
+    else if (jefaDone) currentStep = 6;
+    else currentStep = 5;
   }
   if (pagos.length > 0) {
     currentStep = 8;
@@ -235,9 +249,9 @@ export const SolicitudDetailPage: React.FC = () => {
     },
     {
       label: 'Tribunal/Gobierno',
-      status: currentStep >= 6 ? 'completed' : 'pending',
-      date: compra?.fecha_aprobacion_jefa || compra?.fecha_aprobacion_tribunal,
-      user: compra?.jefa?.nombre || compra?.tribunal?.nombre
+      status: currentStep >= 7 ? 'completed' : (currentStep >= 6 ? 'completed' : 'pending'), // Se mantiene completed si ya inició autorizaciones
+      date: compra?.fecha_aprobacion_tribunal || compra?.fecha_aprobacion_jefa,
+      user: compra?.tribunal?.nombre || compra?.jefa?.nombre
     },
     {
       label: 'Compra',
@@ -324,7 +338,7 @@ export const SolicitudDetailPage: React.FC = () => {
       </div>
 
       {/* Action Panel for "Pendiente" */}
-      {solicitud.estado === 'pendiente' && (user?.rol !== 'area' || user?.email === 'darioanzaudo@gmail.com') && (
+      {solicitud.estado === 'pendiente' && (user?.rol === 'compras' || user?.rol === 'jefa_comunal' || user?.rol === 'admin') && (
         <div className="bg-gradient-to-r from-primary/10 to-transparent border-l-4 border-l-primary p-6 rounded-r-2xl animate-in slide-in-from-left duration-500 shadow-sm">
           <div className="flex flex-col md:flex-row justify-between items-center gap-4">
             <div>
@@ -409,7 +423,7 @@ export const SolicitudDetailPage: React.FC = () => {
               </div>
               <div className="flex items-center gap-4">
                 <span className="text-[10px] font-black text-primary bg-primary/10 px-3 py-1 rounded-full">{presupuestos.length} OFERTAS</span>
-                {solicitud.estado === 'aprobada' && (
+                {(solicitud.estado === 'aprobada' && (user?.rol === 'compras' || user?.rol === 'admin')) && (
                   <Button size="sm" leftIcon="add" onClick={() => setIsModalOpen(true)}>Agregar Presupuesto</Button>
                 )}
               </div>
@@ -459,10 +473,14 @@ export const SolicitudDetailPage: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 text-right">
                         {p.estado === 'pendiente' && solicitud.estado === 'pendiente_aprobacion_presupuestos' && !presupuestos.some(x => x.estado === 'aprobado') ? (
-                          <Button size="sm" onClick={() => {
-                            setBudgetToApprove(p);
-                            setIsConfigModalOpen(true);
-                          }}>Evaluar</Button>
+                          (user?.rol === 'compras' || user?.rol === 'admin') ? (
+                            <Button size="sm" onClick={() => {
+                              setBudgetToApprove(p);
+                              setIsConfigModalOpen(true);
+                            }}>Evaluar</Button>
+                          ) : (
+                            <span className="text-[10px] font-black text-slate-400 uppercase italic">Pendiente Evaluación</span>
+                          )
                         ) : (
                           <span className="material-symbols-outlined text-slate-300">more_vert</span>
                         )}
@@ -494,37 +512,23 @@ export const SolicitudDetailPage: React.FC = () => {
                   Autorizaciones Legales
                 </h3>
                 <div className="space-y-4">
-                  {compra?.requiere_tribunal && (
-                    <div className={`p-4 rounded-xl border transition-all ${compra.aprobado_tribunal ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
-                      <p className="text-xs font-bold text-slate-900 mb-1">Visado Tribunal de Cuentas</p>
-                      {!compra.aprobado_tribunal ? (
-                        <div className="mt-3 space-y-2">
-                          <Input placeholder="Nro. Resolución" className="text-xs py-1.5" />
-                          <Button size="sm" className="w-full" onClick={async () => {
-                            await (supabase.from('compras') as any).update({ aprobado_tribunal: true, aprobado_por_tribunal: user?.id, fecha_aprobacion_tribunal: new Date().toISOString() }).eq('id', compra.id);
-                            fetchData();
-                          }}>Registrar Visado</Button>
-                        </div>
-                      ) : (
-                        <div className="flex items-center gap-2 text-green-600">
-                          <span className="material-symbols-outlined text-sm">check_circle</span>
-                          <span className="text-[11px] font-bold uppercase">Resolución Aprobada</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  <div className={`p-4 rounded-xl border transition-all ${compra?.aprobado_jefa ? 'bg-green-50 border-green-200' :
-                    (compra?.requiere_tribunal && !compra.aprobado_tribunal ? 'opacity-50 grayscale bg-slate-100 border-slate-100' : 'bg-slate-50 border-slate-200 border-l-4 border-l-primary')
-                    }`}>
+                  <div className={`p-4 rounded-xl border transition-all ${compra?.aprobado_jefa ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200 border-l-4 border-l-primary'}`}>
                     <p className="text-xs font-bold text-slate-900 mb-1">Decreto de Adjudicación (Intendente)</p>
                     {!compra?.aprobado_jefa ? (
                       <Button
                         size="sm"
                         className="w-full"
-                        disabled={compra?.requiere_tribunal && !compra.aprobado_tribunal}
+                        disabled={user?.rol !== 'jefa_comunal' && user?.rol !== 'admin'}
                         onClick={async () => {
-                          await (supabase.from('compras') as any).update({ aprobado_jefa: true, aprobado_por_jefa: user?.id, fecha_aprobacion_jefa: new Date().toISOString(), estado: 'aprobado' }).eq('id', compra.id);
+                          const updateData: any = { 
+                            aprobado_jefa: true, 
+                            aprobado_por_jefa: user?.id, 
+                            fecha_aprobacion_jefa: new Date().toISOString() 
+                          };
+                          if (!compra.requiere_tribunal) {
+                            updateData.estado = 'aprobado';
+                          }
+                          await (supabase.from('compras') as any).update(updateData).eq('id', compra.id);
                           fetchData();
                         }}
                       >
@@ -537,12 +541,45 @@ export const SolicitudDetailPage: React.FC = () => {
                       </div>
                     )}
                   </div>
+
+                  {compra?.requiere_tribunal && (
+                    <div className={`p-4 rounded-xl border transition-all ${compra.aprobado_tribunal ? 'bg-green-50 border-green-200' : 
+                      (!compra.aprobado_jefa ? 'opacity-50 grayscale bg-slate-100 border-slate-100' : 'bg-slate-50 border-slate-200 border-l-4 border-l-primary')}`}>
+                      <p className="text-xs font-bold text-slate-900 mb-1">Visado Tribunal de Cuentas</p>
+                      {!compra.aprobado_tribunal ? (
+                        <div className="mt-3 space-y-2">
+                          <Input placeholder="Nro. Resolución" className="text-xs py-1.5" />
+                          <Button 
+                            size="sm" 
+                            className="w-full" 
+                            disabled={!compra.aprobado_jefa || (user?.rol !== 'tribunal_cuentas' && user?.rol !== 'admin')}
+                            onClick={async () => {
+                              await (supabase.from('compras') as any).update({ 
+                                aprobado_tribunal: true, 
+                                aprobado_por_tribunal: user?.id, 
+                                fecha_aprobacion_tribunal: new Date().toISOString(),
+                                estado: 'aprobado'
+                              }).eq('id', compra.id);
+                              fetchData();
+                            }}
+                          >
+                            Registrar Visado
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 text-green-600">
+                          <span className="material-symbols-outlined text-sm">check_circle</span>
+                          <span className="text-[11px] font-bold uppercase">Resolución Aprobada</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {/* EJECUCION DE COMPRA */}
-            {compra?.aprobado_jefa && !compra.fecha_compra && (
+            {(currentStep >= 7) && !compra.fecha_compra && (
               <div className="bg-white border-2 border-primary/20 rounded-2xl p-6 shadow-md animate-in slide-in-from-left-4 duration-500">
                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary">shopping_cart</span>
@@ -552,6 +589,7 @@ export const SolicitudDetailPage: React.FC = () => {
                 <Button
                   className="w-full"
                   leftIcon="app_registration"
+                  disabled={user?.rol !== 'compras' && user?.rol !== 'admin'}
                   onClick={() => setIsPurchaseModalOpen(true)}
                 >
                   REGISTRAR COMPRA
@@ -634,7 +672,8 @@ export const SolicitudDetailPage: React.FC = () => {
           </div>
 
           {/* Plan de Pagos Section */}
-          <div className="lg:col-span-7">
+          {(user?.rol !== 'area' && user?.rol !== 'tribunal_cuentas') && (
+            <div className="lg:col-span-7">
             <div className="bg-white border border-[#e0e4e8] rounded-2xl overflow-hidden shadow-sm h-full flex flex-col relative">
               <div className="p-6 border-b border-[#e0e4e8] bg-slate-50 flex justify-between items-center">
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
@@ -642,7 +681,7 @@ export const SolicitudDetailPage: React.FC = () => {
                   Plan de Pagos
                 </h3>
                 {compra?.fecha_compra && pagos.length === 0 && (
-                  <Button size="sm" leftIcon="auto_mode" onClick={() => setIsPlanModalOpen(true)}>Generar Plan</Button>
+                  <Button size="sm" leftIcon="auto_mode" disabled={user?.rol !== 'compras' && user?.rol !== 'admin'} onClick={() => setIsPlanModalOpen(true)}>Generar Plan</Button>
                 )}
               </div>
 
@@ -702,45 +741,46 @@ export const SolicitudDetailPage: React.FC = () => {
                                   <span className="material-symbols-outlined text-sm">description</span>
                                 </button>
                               )}
-                              <button
-                                onClick={async () => {
-                                  if (p.estado === 'pagado') {
-                                    if (confirm('¿Desea anular el registro de este pago?')) {
-                                      // 1. Eliminar movimiento de cuenta corriente
-                                      await (supabase
-                                        .from('cuenta_corriente_proveedores') as any)
-                                        .delete()
-                                        .eq('pago_id', p.id);
+                                <button
+                                  onClick={async () => {
+                                    if (p.estado === 'pagado') {
+                                      if (confirm('¿Desea anular el registro de este pago?')) {
+                                        // 1. Eliminar movimiento de cuenta corriente
+                                        await (supabase
+                                          .from('cuenta_corriente_proveedores') as any)
+                                          .delete()
+                                          .eq('pago_id', p.id);
 
-                                      // 2. Actualizar estado del pago
-                                      await (supabase.from('pagos') as any).update({
-                                        estado: 'pendiente',
-                                        fecha_pago_real: null,
-                                        medio_pago: null,
-                                        comprobante_url: null
-                                      }).eq('id', p.id);
+                                        // 2. Actualizar estado del pago
+                                        await (supabase.from('pagos') as any).update({
+                                          estado: 'pendiente',
+                                          fecha_pago_real: null,
+                                          medio_pago: null,
+                                          comprobante_url: null
+                                        }).eq('id', p.id);
 
-                                      // 3. Si el expediente estaba finalizado, volverlo a estado activo
-                                      if (compra.estado === 'finalizada') {
-                                        await (supabase.from('compras') as any).update({ estado: 'aprobado' }).eq('id', compra.id);
+                                        // 3. Si el expediente estaba finalizado, volverlo a estado activo
+                                        if (compra.estado === 'finalizada') {
+                                          await (supabase.from('compras') as any).update({ estado: 'aprobado' }).eq('id', compra.id);
+                                        }
+
+                                        fetchData();
                                       }
-
-                                      fetchData();
+                                    } else {
+                                      setSelectedPago(p);
+                                      setPaymentConfirmData({
+                                        ...paymentConfirmData,
+                                        monto: p.monto,
+                                        fecha_pago_real: new Date().toISOString().split('T')[0]
+                                      });
+                                      setIsPaymentConfirmModalOpen(true);
                                     }
-                                  } else {
-                                    setSelectedPago(p);
-                                    setPaymentConfirmData({
-                                      ...paymentConfirmData,
-                                      monto: p.monto,
-                                      fecha_pago_real: new Date().toISOString().split('T')[0]
-                                    });
-                                    setIsPaymentConfirmModalOpen(true);
-                                  }
-                                }}
-                                className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline"
-                              >
-                                {p.estado === 'pagado' ? 'ANULAR' : 'MARCAR PAGO'}
-                              </button>
+                                  }}
+                                  className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline disabled:opacity-30"
+                                  disabled={user?.rol !== 'tesorero' && user?.rol !== 'admin'}
+                                >
+                                  {p.estado === 'pagado' ? 'ANULAR' : 'MARCAR PAGO'}
+                                </button>
                             </div>
                           </td>
                         </tr>
@@ -766,7 +806,8 @@ export const SolicitudDetailPage: React.FC = () => {
               )}
 
             </div>
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

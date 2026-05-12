@@ -6,6 +6,7 @@ import { StatCard } from '@/components/ui/StatCard';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
 import { supabase } from '@/lib/supabase';
+import { useAuthStore } from '@/stores/authStore';
 
 export const SolicitudesPage: React.FC = () => {
   const [solicitudes, setSolicitudes] = React.useState<any[]>([]);
@@ -15,11 +16,12 @@ export const SolicitudesPage: React.FC = () => {
     fetchSolicitudes();
   }, []);
 
+  const { user: currentUser } = useAuthStore();
+
   const fetchSolicitudes = async () => {
     setLoading(true);
     try {
-      // Usamos la sintaxis exacta para evitar el fallo de la consulta compleja
-      const { data, error } = await supabase
+      let query = supabase
         .from('solicitudes')
         .select(`
           *,
@@ -29,24 +31,36 @@ export const SolicitudesPage: React.FC = () => {
           compras(
             id, 
             monto_total, 
+            requiere_tribunal,
+            aprobado_tribunal,
             pagos(id, fecha_vencimiento, estado, monto)
           )
-        `)
-        .order('created_at', { ascending: false });
+        `);
 
-      if (error) {
-        console.error('Error en consulta compleja:', error);
-        // Fallback robusto
-        const { data: basicData, error: basicError } = await supabase
-          .from('solicitudes')
-          .select('*, areas(nombre), usuarios!solicitante_id(nombre)')
-          .order('created_at', { ascending: false });
-        
-        if (basicError) throw basicError;
-        setSolicitudes(basicData || []);
-      } else {
-        setSolicitudes(data || []);
+      // Filtrado por ROL
+      if (currentUser?.rol === 'area' && currentUser.area_id) {
+        query = query.eq('area_id', currentUser.area_id);
       }
+      
+      if (currentUser?.rol === 'tribunal_cuentas') {
+        // El tribunal solo ve lo que requiere tribunal
+        // Nota: Esto es un filtro simplificado, idealmente se filtraría por el campo en la tabla compras join
+        // Pero dado que compras es un join, el filtro se aplica después o mediante una vista.
+        // Por ahora lo filtraremos en el cliente para asegurar UX si la query directa es compleja.
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
+
+      if (error) throw error;
+      
+      let finalData = data || [];
+      
+      // Filtro adicional en cliente para casos complejos de joins
+      if (currentUser?.rol === 'tribunal_cuentas') {
+        finalData = finalData.filter((s: any) => s.compras?.some((c: any) => c.requiere_tribunal));
+      }
+
+      setSolicitudes(finalData);
     } catch (error: any) {
       console.error('Error fetching solicitudes:', error.message);
     } finally {
@@ -103,11 +117,13 @@ export const SolicitudesPage: React.FC = () => {
             Gestione y supervise las solicitudes de compra de la administración central.
           </p>
         </div>
-        <Link to="/solicitudes/nueva">
-          <Button size="lg" leftIcon="add_circle">
-            NUEVA SOLICITUD
-          </Button>
-        </Link>
+        {(currentUser?.rol === 'area' || currentUser?.rol === 'compras' || currentUser?.rol === 'admin') && (
+          <Link to="/solicitudes/nueva">
+            <Button size="lg" leftIcon="add_circle">
+              NUEVA SOLICITUD
+            </Button>
+          </Link>
+        )}
       </div>
 
       {/* Stats Grid */}

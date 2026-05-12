@@ -59,7 +59,9 @@ export const getRolLabel = (rol: string) => {
     compras: 'Oficina de Compras',
     aprobacion: 'Aprobación',
     tribunal_cuentas: 'Tribunal de Cuentas',
-    jefa_comunal: 'Jefa Comunal',
+    jefa_comunal: 'Intendenta / Jefa Comunal',
+    tesorero: 'Tesorería',
+    admin: 'Administrador',
   }
   return roles[rol] || rol
 }

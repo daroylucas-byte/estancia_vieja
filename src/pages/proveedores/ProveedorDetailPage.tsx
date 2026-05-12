@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatDate } from '@/utils/formatters';
+import { useAuthStore } from '@/stores/authStore';
 import type { Database } from '@/lib/database.types';
 
 type Proveedor = Database['public']['Tables']['proveedores']['Row'] & {
@@ -14,6 +15,7 @@ type MovimientoCC = Database['public']['Tables']['cuenta_corriente_proveedores']
 export const ProveedorDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   
   const [proveedor, setProveedor] = useState<Proveedor | null>(null);
   const [movimientos, setMovimientos] = useState<MovimientoCC[]>([]);
@@ -120,7 +122,9 @@ export const ProveedorDetailPage: React.FC = () => {
           </p>
         </div>
         <div className="flex gap-3 w-full md:w-auto">
-          <Button variant="secondary" leftIcon="edit">EDITAR</Button>
+          {(user?.rol === 'compras' || user?.rol === 'admin') && (
+            <Button variant="secondary" leftIcon="edit">EDITAR</Button>
+          )}
           <Button leftIcon="print">RESUMEN</Button>
         </div>
       </div>
@@ -171,7 +175,9 @@ export const ProveedorDetailPage: React.FC = () => {
           </h3>
           <div className="flex gap-2">
             <Button size="sm" variant="secondary" leftIcon="filter_list">Filtrar</Button>
-            <Button size="sm" leftIcon="add">Nuevo Movimiento</Button>
+            {(user?.rol === 'compras' || user?.rol === 'tesorero' || user?.rol === 'admin') && (
+              <Button size="sm" leftIcon="add">Nuevo Movimiento</Button>
+            )}
           </div>
         </div>
 

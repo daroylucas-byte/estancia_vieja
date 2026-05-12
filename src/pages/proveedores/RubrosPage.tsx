@@ -3,15 +3,17 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
+import { useAuthStore } from '@/stores/authStore';
 
 type Rubro = any;
 
 export const RubrosPage: React.FC = () => {
+  const { user } = useAuthStore();
   const [rubros, setRubros] = useState<Rubro[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingRubro, setEditingRubro] = useState<Rubro | null>(null);
-  
+
   // Form state
   const [nombre, setNombre] = useState('');
   const [descripcion, setDescripcion] = useState('');
@@ -28,7 +30,7 @@ export const RubrosPage: React.FC = () => {
         .from('rubros_proveedores') as any)
         .select('*')
         .order('nombre');
-      
+
       if (error) throw error;
       setRubros(data || []);
     } catch (error) {
@@ -57,7 +59,7 @@ export const RubrosPage: React.FC = () => {
 
     try {
       setIsSubmitting(true);
-      
+
       if (editingRubro) {
         const { error } = await (supabase
           .from('rubros_proveedores') as any)
@@ -89,7 +91,7 @@ export const RubrosPage: React.FC = () => {
         .from('rubros_proveedores')
         .delete()
         .eq('id', id);
-      
+
       if (error) throw error;
       await fetchRubros();
     } catch (error: any) {
@@ -107,9 +109,11 @@ export const RubrosPage: React.FC = () => {
             Administre las categorías de rubros para la clasificación de proveedores.
           </p>
         </div>
-        <Button leftIcon="add_circle" onClick={() => handleOpenModal()}>
-          NUEVO RUBRO
-        </Button>
+        {(user?.rol === 'compras' || user?.rol === 'jefa_comunal' || user?.rol === 'admin') && (
+          <Button leftIcon="add_circle" onClick={() => handleOpenModal()}>
+            NUEVO RUBRO
+          </Button>
+        )}
       </div>
 
       <div className="bg-white border border-[#e0e4e8] rounded-xl overflow-hidden shadow-sm">
@@ -150,18 +154,22 @@ export const RubrosPage: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
-                        <button 
-                          onClick={() => handleOpenModal(rubro)}
-                          className="p-2 text-slate-400 hover:text-primary transition-colors hover:bg-primary/5 rounded-lg"
-                        >
-                          <span className="material-symbols-outlined text-xl">edit</span>
-                        </button>
-                        <button 
-                          onClick={() => handleDelete(rubro.id)}
-                          className="p-2 text-slate-400 hover:text-red-600 transition-colors hover:bg-red-50 rounded-lg"
-                        >
-                          <span className="material-symbols-outlined text-xl">delete</span>
-                        </button>
+                        {(user?.rol === 'compras' || user?.rol === 'jefa_comunal' || user?.rol === 'admin') && (
+                          <>
+                            <button
+                              onClick={() => handleOpenModal(rubro)}
+                              className="p-2 text-slate-400 hover:text-primary transition-colors hover:bg-primary/5 rounded-lg"
+                            >
+                              <span className="material-symbols-outlined text-xl">edit</span>
+                            </button>
+                            <button
+                              onClick={() => handleDelete(rubro.id)}
+                              className="p-2 text-slate-400 hover:text-red-600 transition-colors hover:bg-red-50 rounded-lg"
+                            >
+                              <span className="material-symbols-outlined text-xl">delete</span>
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>

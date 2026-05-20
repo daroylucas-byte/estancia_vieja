@@ -85,6 +85,40 @@ export const SolicitudDetailPage: React.FC = () => {
     proveedor_id: '', monto: '', descripcion: '', archivo: null as File | null, fecha_caducidad: ''
   });
 
+  // Buscador de proveedor en modal presupuesto
+  const [proveedorSearch, setProveedorSearch] = React.useState('');
+  const [proveedorSearchFocused, setProveedorSearchFocused] = React.useState(false);
+  const [proveedorSeleccionado, setProveedorSeleccionado] = React.useState<{ id: string; razon_social: string } | null>(null);
+  const [showNuevoProveedor, setShowNuevoProveedor] = React.useState(false);
+  const [nuevoProveedor, setNuevoProveedor] = React.useState({ razon_social: '', cuit: '', condicion_fiscal: 'responsable_inscripto' });
+  const [savingProveedor, setSavingProveedor] = React.useState(false);
+
+  const proveedoresFiltrados = proveedorSearch.length >= 2
+    ? providers.filter(p => p.razon_social.toLowerCase().includes(proveedorSearch.toLowerCase()))
+    : [];
+
+  const handleCrearProveedor = async () => {
+    if (!nuevoProveedor.razon_social.trim() || !nuevoProveedor.cuit.trim()) return;
+    setSavingProveedor(true);
+    try {
+      const { data, error } = await (supabase.from('proveedores') as any)
+        .insert({ razon_social: nuevoProveedor.razon_social.trim(), cuit: nuevoProveedor.cuit.trim(), condicion_fiscal: nuevoProveedor.condicion_fiscal })
+        .select('id, razon_social')
+        .single();
+      if (error) throw error;
+      setProviders(prev => [...prev, data]);
+      setProveedorSeleccionado(data);
+      setNewBudget(prev => ({ ...prev, proveedor_id: data.id }));
+      setProveedorSearch(data.razon_social);
+      setShowNuevoProveedor(false);
+      setNuevoProveedor({ razon_social: '', cuit: '', condicion_fiscal: 'responsable_inscripto' });
+    } catch (e: any) {
+      alert('Error al crear proveedor: ' + e.message);
+    } finally {
+      setSavingProveedor(false);
+    }
+  };
+
   React.useEffect(() => {
     if (id) {
       fetchData();
@@ -400,15 +434,53 @@ export const SolicitudDetailPage: React.FC = () => {
       <div className="space-y-8">
         {/* Descripcion Section */}
         <section className="bg-white border border-[#e0e4e8] rounded-2xl p-6 shadow-sm">
-          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2">
             <span className="material-symbols-outlined text-sm">subject</span>
             Descripción del Pedido
           </h3>
-          <p className="text-sm text-slate-700 leading-relaxed">{solicitud.descripcion}</p>
+
+          {/* Metadata grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-5 p-4 bg-slate-50 rounded-xl border border-slate-100">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Área Solicitante</p>
+              <p className="text-sm font-semibold text-slate-700">{solicitud.areas?.nombre || '—'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Solicitado por</p>
+              <p className="text-sm font-semibold text-slate-700">{solicitud.usuarios?.nombre || '—'}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Fecha de Carga</p>
+              <p className="text-sm font-semibold text-slate-700">{solicitud.created_at ? formatDate(solicitud.created_at) : '—'}</p>
+            </div>
+            {solicitud.aprobador?.nombre && (
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Aprobado por</p>
+                <p className="text-sm font-semibold text-slate-700">{solicitud.aprobador.nombre}</p>
+              </div>
+            )}
+            {solicitud.fecha_aprobacion && (
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Fecha Aprobación</p>
+                <p className="text-sm font-semibold text-slate-700">{formatDate(solicitud.fecha_aprobacion)}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Descripción */}
+          <div className="mb-4">
+            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Detalle del Pedido</p>
+            <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-line">{solicitud.descripcion}</p>
+          </div>
+
+          {/* Observaciones */}
           {solicitud.observaciones && (
-            <div className="mt-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Observaciones / Notas</p>
-              <p className="text-xs text-slate-600">{solicitud.observaciones}</p>
+            <div className="mt-4 p-4 bg-amber-50 rounded-xl border border-amber-100">
+              <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1 flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">info</span>
+                Observaciones / Notas
+              </p>
+              <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-line">{solicitud.observaciones}</p>
             </div>
           )}
         </section>
@@ -505,7 +577,7 @@ export const SolicitudDetailPage: React.FC = () => {
           {/* Timeline and Governance Panel */}
           <div className="lg:col-span-5 space-y-6">
             {/* GOBERNANZA PANEL */}
-            {presupuestos.some(p => p.estado === 'aprobado') && (
+            {(presupuestos.some(p => p.estado === 'aprobado') || !!compra) && (
               <div className="bg-white border-2 border-primary/20 rounded-2xl p-6 shadow-md animate-in slide-in-from-left-4 duration-500">
                 <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-6 flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary">verified_user</span>
@@ -520,10 +592,10 @@ export const SolicitudDetailPage: React.FC = () => {
                         className="w-full"
                         disabled={user?.rol !== 'jefa_comunal' && (user?.rol as any) !== 'admin'}
                         onClick={async () => {
-                          const updateData: any = { 
-                            aprobado_jefa: true, 
-                            aprobado_por_jefa: user?.id, 
-                            fecha_aprobacion_jefa: new Date().toISOString() 
+                          const updateData: any = {
+                            aprobado_jefa: true,
+                            aprobado_por_jefa: user?.id,
+                            fecha_aprobacion_jefa: new Date().toISOString()
                           };
                           if (!compra.requiere_tribunal) {
                             updateData.estado = 'aprobado';
@@ -543,20 +615,20 @@ export const SolicitudDetailPage: React.FC = () => {
                   </div>
 
                   {compra?.requiere_tribunal && (
-                    <div className={`p-4 rounded-xl border transition-all ${compra.aprobado_tribunal ? 'bg-green-50 border-green-200' : 
+                    <div className={`p-4 rounded-xl border transition-all ${compra.aprobado_tribunal ? 'bg-green-50 border-green-200' :
                       (!compra.aprobado_jefa ? 'opacity-50 grayscale bg-slate-100 border-slate-100' : 'bg-slate-50 border-slate-200 border-l-4 border-l-primary')}`}>
                       <p className="text-xs font-bold text-slate-900 mb-1">Visado Tribunal de Cuentas</p>
                       {!compra.aprobado_tribunal ? (
                         <div className="mt-3 space-y-2">
                           <Input placeholder="Nro. Resolución" className="text-xs py-1.5" />
-                          <Button 
-                            size="sm" 
-                            className="w-full" 
+                          <Button
+                            size="sm"
+                            className="w-full"
                             disabled={!compra.aprobado_jefa || (user?.rol !== 'tribunal_cuentas' && (user?.rol as any) !== 'admin')}
                             onClick={async () => {
-                              await (supabase.from('compras') as any).update({ 
-                                aprobado_tribunal: true, 
-                                aprobado_por_tribunal: user?.id, 
+                              await (supabase.from('compras') as any).update({
+                                aprobado_tribunal: true,
+                                aprobado_por_tribunal: user?.id,
                                 fecha_aprobacion_tribunal: new Date().toISOString(),
                                 estado: 'aprobado'
                               }).eq('id', compra.id);
@@ -674,73 +746,73 @@ export const SolicitudDetailPage: React.FC = () => {
           {/* Plan de Pagos Section */}
           {(user?.rol !== 'area' && user?.rol !== 'tribunal_cuentas') && (
             <div className="lg:col-span-7">
-            <div className="bg-white border border-[#e0e4e8] rounded-2xl overflow-hidden shadow-sm h-full flex flex-col relative">
-              <div className="p-6 border-b border-[#e0e4e8] bg-slate-50 flex justify-between items-center">
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">payments</span>
-                  Plan de Pagos
-                </h3>
-                {compra?.fecha_compra && pagos.length === 0 && (
-                  <Button size="sm" leftIcon="auto_mode" disabled={user?.rol !== 'compras' && (user?.rol as any) !== 'admin'} onClick={() => setIsPlanModalOpen(true)}>Generar Plan</Button>
-                )}
-              </div>
-
-              {compra?.fecha_compra && pagos.length > 0 && (
-                <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 grid grid-cols-3 gap-4">
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Compra</span>
-                    <span className="text-sm font-black text-slate-900">{formatCurrency(compra.monto_total)}</span>
-                  </div>
-                  <div className="flex flex-col border-x border-slate-200 px-4">
-                    <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Total Pagado</span>
-                    <span className="text-sm font-black text-emerald-600">
-                      {formatCurrency(pagos.filter(p => p.estado === 'pagado').reduce((acc, p) => acc + p.monto, 0))}
-                    </span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Saldo Pendiente</span>
-                    <span className="text-sm font-black text-amber-600">
-                      {formatCurrency(compra.monto_total - pagos.filter(p => p.estado === 'pagado').reduce((acc, p) => acc + p.monto, 0))}
-                    </span>
-                  </div>
+              <div className="bg-white border border-[#e0e4e8] rounded-2xl overflow-hidden shadow-sm h-full flex flex-col relative">
+                <div className="p-6 border-b border-[#e0e4e8] bg-slate-50 flex justify-between items-center">
+                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                    <span className="material-symbols-outlined text-primary">payments</span>
+                    Plan de Pagos
+                  </h3>
+                  {compra?.fecha_compra && pagos.length === 0 && (
+                    <Button size="sm" leftIcon="auto_mode" disabled={user?.rol !== 'compras' && (user?.rol as any) !== 'admin'} onClick={() => setIsPlanModalOpen(true)}>Generar Plan</Button>
+                  )}
                 </div>
-              )}
 
-              <div className="flex-1 overflow-auto p-6">
-                {pagos.length > 0 ? (
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-slate-100">
-                        <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cuota</th>
-                        <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vencimiento</th>
-                        <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Monto</th>
-                        <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Estado</th>
-                        <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-50">
-                      {pagos.sort((a, b) => a.numero_cuota - b.numero_cuota).map((p) => (
-                        <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="py-4 text-xs font-bold text-slate-700">Cuota {p.numero_cuota}</td>
-                          <td className="py-4 text-xs text-slate-500">{formatDate(p.fecha_vencimiento)}</td>
-                          <td className="py-4 text-xs font-black text-slate-900 text-right">{formatCurrency(p.monto)}</td>
-                          <td className="py-4 text-center">
-                            <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${p.estado === 'pagado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
-                              }`}>
-                              {p.estado}
-                            </span>
-                          </td>
-                          <td className="py-4 text-right">
-                            <div className="flex items-center justify-end gap-3">
-                              {p.comprobante_url && (
-                                <button
-                                  onClick={() => setPreviewUrl(p.comprobante_url)}
-                                  className="text-emerald-600 hover:text-emerald-700 p-1 bg-emerald-50 rounded-lg transition-colors"
-                                  title="Ver Comprobante"
-                                >
-                                  <span className="material-symbols-outlined text-sm">description</span>
-                                </button>
-                              )}
+                {compra?.fecha_compra && pagos.length > 0 && (
+                  <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 grid grid-cols-3 gap-4">
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Total Compra</span>
+                      <span className="text-sm font-black text-slate-900">{formatCurrency(compra.monto_total)}</span>
+                    </div>
+                    <div className="flex flex-col border-x border-slate-200 px-4">
+                      <span className="text-[9px] font-black text-emerald-500 uppercase tracking-widest">Total Pagado</span>
+                      <span className="text-sm font-black text-emerald-600">
+                        {formatCurrency(pagos.filter(p => p.estado === 'pagado').reduce((acc, p) => acc + p.monto, 0))}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Saldo Pendiente</span>
+                      <span className="text-sm font-black text-amber-600">
+                        {formatCurrency(compra.monto_total - pagos.filter(p => p.estado === 'pagado').reduce((acc, p) => acc + p.monto, 0))}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex-1 overflow-auto p-6">
+                  {pagos.length > 0 ? (
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-100">
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Cuota</th>
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Vencimiento</th>
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Monto</th>
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Estado</th>
+                          <th className="py-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {pagos.sort((a, b) => a.numero_cuota - b.numero_cuota).map((p) => (
+                          <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
+                            <td className="py-4 text-xs font-bold text-slate-700">Cuota {p.numero_cuota}</td>
+                            <td className="py-4 text-xs text-slate-500">{formatDate(p.fecha_vencimiento)}</td>
+                            <td className="py-4 text-xs font-black text-slate-900 text-right">{formatCurrency(p.monto)}</td>
+                            <td className="py-4 text-center">
+                              <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-full border ${p.estado === 'pagado' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'
+                                }`}>
+                                {p.estado}
+                              </span>
+                            </td>
+                            <td className="py-4 text-right">
+                              <div className="flex items-center justify-end gap-3">
+                                {p.comprobante_url && (
+                                  <button
+                                    onClick={() => setPreviewUrl(p.comprobante_url)}
+                                    className="text-emerald-600 hover:text-emerald-700 p-1 bg-emerald-50 rounded-lg transition-colors"
+                                    title="Ver Comprobante"
+                                  >
+                                    <span className="material-symbols-outlined text-sm">description</span>
+                                  </button>
+                                )}
                                 <button
                                   onClick={async () => {
                                     if (p.estado === 'pagado') {
@@ -777,35 +849,35 @@ export const SolicitudDetailPage: React.FC = () => {
                                     }
                                   }}
                                   className="text-[10px] font-black text-primary uppercase tracking-widest hover:underline disabled:opacity-30"
-                                  disabled={(user?.rol as any) !== 'tesorero' && (user?.rol as any) !== 'admin'}
+                                  disabled={(user?.rol as any) !== 'tesorero' && (user?.rol as any) !== 'compras' && (user?.rol as any) !== 'admin'}
                                 >
                                   {p.estado === 'pagado' ? 'ANULAR' : 'MARCAR PAGO'}
                                 </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 italic">
-                    <span className="material-symbols-outlined text-4xl opacity-20">receipt</span>
-                    <p className="text-xs">No hay un plan de pagos configurado.</p>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 gap-2 italic">
+                      <span className="material-symbols-outlined text-4xl opacity-20">receipt</span>
+                      <p className="text-xs">No hay un plan de pagos configurado.</p>
+                    </div>
+                  )}
+                </div>
+
+                {!compra?.fecha_compra && (
+                  <div className="absolute inset-0 z-20 bg-white/60 backdrop-blur-[1px] flex flex-col items-center justify-center p-12 text-center">
+                    <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg border border-slate-100 mb-4">
+                      <span className="material-symbols-outlined text-slate-300 text-4xl">lock</span>
+                    </div>
+                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">Pagos Bloqueados</h4>
+                    <p className="text-xs text-slate-500 max-w-[240px]">Debe registrarse la compra efectiva (factura) para habilitar el plan de pagos.</p>
                   </div>
                 )}
+
               </div>
-
-              {!compra?.fecha_compra && (
-                <div className="absolute inset-0 z-20 bg-white/60 backdrop-blur-[1px] flex flex-col items-center justify-center p-12 text-center">
-                  <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg border border-slate-100 mb-4">
-                    <span className="material-symbols-outlined text-slate-300 text-4xl">lock</span>
-                  </div>
-                  <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">Pagos Bloqueados</h4>
-                  <p className="text-xs text-slate-500 max-w-[240px]">Debe registrarse la compra efectiva (factura) para habilitar el plan de pagos.</p>
-                </div>
-              )}
-
-            </div>
             </div>
           )}
         </div>
@@ -865,7 +937,7 @@ export const SolicitudDetailPage: React.FC = () => {
       </Modal>
 
       {/* Add Budget Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Nuevo Presupuesto" footer={<Button onClick={async () => {
+      <Modal isOpen={isModalOpen} onClose={() => { setIsModalOpen(false); setProveedorSearch(''); setProveedorSeleccionado(null); setShowNuevoProveedor(false); }} title="Nuevo Presupuesto" footer={<Button onClick={async () => {
         if (!newBudget.monto || !newBudget.proveedor_id) {
           alert('Por favor, complete todos los campos obligatorios');
           return;
@@ -922,18 +994,112 @@ export const SolicitudDetailPage: React.FC = () => {
           setIsModalOpen(false);
           fetchData();
           setNewBudget({ proveedor_id: '', monto: '', descripcion: '', archivo: null, fecha_caducidad: '' });
+          setProveedorSearch('');
+          setProveedorSeleccionado(null);
+          setShowNuevoProveedor(false);
         } catch (e: any) {
           alert('Error: ' + e.message);
         }
       }}>Cargar</Button>}>
         <div className="space-y-4">
-          <Select
-            label="Proveedor"
-            required
-            value={newBudget.proveedor_id}
-            onChange={(e) => setNewBudget({ ...newBudget, proveedor_id: e.target.value })}
-            options={providers.map(p => ({ value: p.id, label: p.razon_social }))}
-          />
+          {/* Buscador de proveedor */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+              Proveedor <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Buscar por nombre..."
+                value={proveedorSearch}
+                onChange={(e) => {
+                  setProveedorSearch(e.target.value);
+                  if (proveedorSeleccionado && e.target.value !== proveedorSeleccionado.razon_social) {
+                    setProveedorSeleccionado(null);
+                    setNewBudget(prev => ({ ...prev, proveedor_id: '' }));
+                  }
+                  setShowNuevoProveedor(false);
+                }}
+                onFocus={() => setProveedorSearchFocused(true)}
+                onBlur={() => setTimeout(() => setProveedorSearchFocused(false), 150)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              />
+              {proveedorSeleccionado && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-green-500 text-base">check_circle</span>
+              )}
+              {/* Dropdown resultados */}
+              {proveedorSearchFocused && proveedorSearch.length >= 2 && !proveedorSeleccionado && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {proveedoresFiltrados.length > 0 ? (
+                    proveedoresFiltrados.map(p => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 transition-colors"
+                        onMouseDown={() => {
+                          setProveedorSeleccionado(p);
+                          setNewBudget(prev => ({ ...prev, proveedor_id: p.id }));
+                          setProveedorSearch(p.razon_social);
+                        }}
+                      >
+                        {p.razon_social}
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-3 text-sm text-slate-500 flex flex-col gap-2">
+                      <span>No se encontró "{proveedorSearch}"</span>
+                      <button
+                        type="button"
+                        className="text-primary font-semibold text-left hover:underline"
+                        onMouseDown={() => {
+                          setShowNuevoProveedor(true);
+                          setNuevoProveedor(prev => ({ ...prev, razon_social: proveedorSearch }));
+                        }}
+                      >
+                        + Agregar "{proveedorSearch}" como nuevo proveedor
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Mini-form nuevo proveedor */}
+            {showNuevoProveedor && (
+              <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nuevo Proveedor</p>
+                <Input
+                  label="Razón Social"
+                  required
+                  value={nuevoProveedor.razon_social}
+                  onChange={(e) => setNuevoProveedor(prev => ({ ...prev, razon_social: e.target.value }))}
+                />
+                <Input
+                  label="CUIT"
+                  required
+                  value={nuevoProveedor.cuit}
+                  onChange={(e) => setNuevoProveedor(prev => ({ ...prev, cuit: e.target.value }))}
+                />
+                <Select
+                  label="Condición Fiscal"
+                  value={nuevoProveedor.condicion_fiscal}
+                  onChange={(e) => setNuevoProveedor(prev => ({ ...prev, condicion_fiscal: e.target.value }))}
+                  options={[
+                    { value: 'responsable_inscripto', label: 'Responsable Inscripto' },
+                    { value: 'monotributista', label: 'Monotributista' },
+                    { value: 'exento', label: 'Exento' },
+                    { value: 'consumidor_final', label: 'Consumidor Final' },
+                  ]}
+                />
+                <div className="flex gap-2">
+                  <Button onClick={handleCrearProveedor} disabled={savingProveedor || !nuevoProveedor.razon_social || !nuevoProveedor.cuit}>
+                    {savingProveedor ? 'Guardando...' : 'Guardar Proveedor'}
+                  </Button>
+                  <button type="button" className="text-sm text-slate-500 hover:underline" onClick={() => setShowNuevoProveedor(false)}>Cancelar</button>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="grid grid-cols-2 gap-4">
             <Input label="Monto" type="number" required value={newBudget.monto} onChange={(e) => setNewBudget({ ...newBudget, monto: e.target.value })} />
             <Input label="Caducidad" type="date" value={newBudget.fecha_caducidad} onChange={(e) => setNewBudget({ ...newBudget, fecha_caducidad: e.target.value })} />
@@ -1217,10 +1383,29 @@ export const SolicitudDetailPage: React.FC = () => {
               }
 
               // 3. Registrar movimiento en Cuenta Corriente del Proveedor
+              let proveedorId = presupuestoGanador?.proveedor_id;
+
+              if (!proveedorId && compra?.id) {
+                // Si el presupuesto ganador no está en el estado local (ej. por RLS del rol Tesorero),
+                // buscamos el proveedor_id desde la cuenta corriente vinculada a esta compra.
+                const { data: ccData } = await supabase
+                  .from('cuenta_corriente_proveedores')
+                  .select('proveedor_id')
+                  .eq('compra_id', compra.id)
+                  .limit(1) as any;
+                if (ccData && ccData.length > 0) {
+                  proveedorId = ccData[0].proveedor_id;
+                }
+              }
+
+              if (!proveedorId) {
+                throw new Error('No se pudo encontrar el proveedor asociado a esta compra.');
+              }
+
               const { error: accError } = await (supabase
                 .from('cuenta_corriente_proveedores') as any)
                 .insert({
-                  proveedor_id: presupuestoGanador.proveedor_id,
+                  proveedor_id: proveedorId,
                   pago_id: selectedPago.id,
                   compra_id: compra.id,
                   monto: montoPagadoReal,

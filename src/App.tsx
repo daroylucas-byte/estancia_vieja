@@ -13,6 +13,7 @@ import { ProveedoresPage } from '@/pages/proveedores/ProveedoresPage';
 import { CreateProveedorPage } from '@/pages/proveedores/CreateProveedorPage';
 import { ProveedorDetailPage } from '@/pages/proveedores/ProveedorDetailPage';
 import { RubrosPage } from '@/pages/proveedores/RubrosPage';
+import { UsuariosPage } from '@/pages/usuarios/UsuariosPage';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { DevRolSwitcher } from '@/components/dev/DevRolSwitcher';
 
@@ -127,6 +128,16 @@ function App() {
           element={
             <ProtectedRoute roles={['admin', 'compras', 'jefa_comunal', 'area']}>
               <ProveedorDetailPage />
+            </ProtectedRoute>
+          } 
+        />
+
+        {/* Usuarios (Gestión) */}
+        <Route 
+          path="/usuarios" 
+          element={
+            <ProtectedRoute roles={['admin', 'compras']}>
+              <UsuariosPage />
             </ProtectedRoute>
           } 
         />

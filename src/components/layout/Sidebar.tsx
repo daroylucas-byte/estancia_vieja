@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { path: '/proveedores', label: 'Proveedores', icon: 'group', roles: ['admin', 'compras', 'jefa_comunal', 'area'] },
   { path: '/proveedores/rubros', label: 'Rubros', icon: 'category', roles: ['admin', 'compras', 'jefa_comunal'] },
   { path: '/licitaciones', label: 'Licitaciones', icon: 'gavel', roles: ['admin', 'compras', 'jefa_comunal'] },
+  { path: '/usuarios', label: 'Usuarios', icon: 'manage_accounts', roles: ['admin', 'compras'] },
   { path: '/configuracion', label: 'Configuración', icon: 'settings', roles: ['admin'] },
 ];
 

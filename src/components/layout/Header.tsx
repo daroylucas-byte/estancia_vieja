@@ -2,7 +2,11 @@ import React from 'react';
 import { useAuthStore } from '@/stores/authStore';
 import { getRolLabel } from '@/utils/estados';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  onMenuClick: () => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ onMenuClick }) => {
   const { user } = useAuthStore();
   const [showNotifications, setShowNotifications] = React.useState(false);
 
@@ -13,9 +17,17 @@ export const Header: React.FC = () => {
   ];
 
   return (
-    <header className="bg-white sticky top-0 z-40 border-b border-[#e0e4e8] flex justify-between items-center h-16 px-6 w-full">
-      <div className="flex items-center">
-        <span className="text-lg font-bold text-primary tracking-tight">Gestión de Contrataciones</span>
+    <header className="bg-white sticky top-0 z-40 border-b border-[#e0e4e8] flex justify-between items-center h-16 px-4 md:px-6 w-full">
+      <div className="flex items-center gap-3">
+        <button 
+          onClick={onMenuClick}
+          className="lg:hidden material-symbols-outlined p-2 -ml-2 text-slate-600 hover:bg-slate-50 rounded-full cursor-pointer transition-colors"
+        >
+          menu
+        </button>
+        <span className="text-base md:text-lg font-bold text-primary tracking-tight truncate max-w-[180px] sm:max-w-none">
+          Gestión de Contrataciones
+        </span>
       </div>
       
       <div className="flex items-center gap-4">

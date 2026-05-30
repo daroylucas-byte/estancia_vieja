@@ -13,7 +13,12 @@ const NAV_ITEMS = [
   { path: '/configuracion', label: 'Configuración', icon: 'settings', roles: ['admin'] },
 ];
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { user, logout } = useAuthStore();
 
   const filteredItems = NAV_ITEMS.filter(item => 
@@ -21,9 +26,11 @@ export const Sidebar: React.FC = () => {
   );
 
   return (
-    <aside className="fixed left-0 top-0 h-full w-[260px] bg-primary-container text-white flex flex-col py-6 px-4 shadow-xl border-r border-white/10 z-50">
-      <div className="mb-8">
-        <div className="flex items-center gap-3 mb-4">
+    <aside className={`fixed left-0 top-0 h-full w-[260px] bg-primary-container text-white flex flex-col py-6 px-4 shadow-xl border-r border-white/10 z-50 transition-transform duration-300 ease-in-out
+      ${isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
+    `}>
+      <div className="mb-8 flex justify-between items-center">
+        <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-white/20 flex items-center justify-center overflow-hidden">
             <span className="material-symbols-outlined text-white text-2xl">account_balance</span>
           </div>
@@ -32,6 +39,12 @@ export const Sidebar: React.FC = () => {
             <p className="text-white/60 text-[10px] uppercase tracking-wider font-bold">Administración Pública</p>
           </div>
         </div>
+        <button 
+          onClick={onClose}
+          className="lg:hidden p-1 text-white/70 hover:text-white rounded-full hover:bg-white/10 flex items-center justify-center"
+        >
+          <span className="material-symbols-outlined">close</span>
+        </button>
       </div>
 
       <nav className="flex-1 space-y-1">
@@ -39,6 +52,7 @@ export const Sidebar: React.FC = () => {
           <NavLink
             key={item.path}
             to={item.path}
+            onClick={onClose}
             className={({ isActive }) => `
               flex items-center gap-3 px-4 py-3 cursor-pointer rounded-md transition-all duration-200
               ${isActive 
@@ -58,7 +72,10 @@ export const Sidebar: React.FC = () => {
           <span className="font-medium text-sm">Ayuda</span>
         </a>
         <button 
-          onClick={logout}
+          onClick={() => {
+            onClose();
+            logout();
+          }}
           className="w-full flex items-center gap-3 px-4 py-3 cursor-pointer text-white/70 hover:text-white hover:bg-white/5 transition-all duration-200"
         >
           <span className="material-symbols-outlined">logout</span>

@@ -5,6 +5,11 @@ import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { queryClient } from './lib/queryClient'
 import './index.css'
 import App from './App.tsx'
+import { registerSW } from 'virtual:pwa-register'
+
+// Register PWA service worker
+registerSW({ immediate: true })
+
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

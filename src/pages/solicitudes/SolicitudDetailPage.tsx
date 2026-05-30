@@ -9,6 +9,15 @@ import { Select } from '../../components/ui/Select';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 
+// CUIT input masking helper
+const formatCUIT = (value: string): string => {
+  const cleaned = value.replace(/\D/g, '').slice(0, 11);
+  if (cleaned.length <= 2) return cleaned;
+  if (cleaned.length <= 10) return `${cleaned.slice(0, 2)}-${cleaned.slice(2)}`;
+  return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 10)}-${cleaned.slice(10)}`;
+};
+
+
 export const SolicitudDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -98,20 +107,39 @@ export const SolicitudDetailPage: React.FC = () => {
     : [];
 
   const handleCrearProveedor = async () => {
-    if (!nuevoProveedor.razon_social.trim() || !nuevoProveedor.cuit.trim()) return;
+    if (!nuevoProveedor.razon_social.trim()) return;
+    
+    const cleanCuit = nuevoProveedor.cuit.trim();
+    if (cleanCuit && !/^\d{2}-\d{8}-\d{1}$/.test(cleanCuit)) {
+      alert('Formato de CUIT inválido (XX-XXXXXXXX-X)');
+      return;
+    }
+
     setSavingProveedor(true);
     try {
+      const insertData: any = { 
+        razon_social: nuevoProveedor.razon_social.trim(),
+        activo: true
+      };
+      if (cleanCuit) {
+        insertData.cuit = cleanCuit;
+      }
+      if (nuevoProveedor.condicion_fiscal) {
+        insertData.condicion_fiscal = nuevoProveedor.condicion_fiscal;
+      }
+
       const { data, error } = await (supabase.from('proveedores') as any)
-        .insert({ razon_social: nuevoProveedor.razon_social.trim(), cuit: nuevoProveedor.cuit.trim(), condicion_fiscal: nuevoProveedor.condicion_fiscal })
+        .insert(insertData)
         .select('id, razon_social')
         .single();
+        
       if (error) throw error;
       setProviders(prev => [...prev, data]);
       setProveedorSeleccionado(data);
       setNewBudget(prev => ({ ...prev, proveedor_id: data.id }));
       setProveedorSearch(data.razon_social);
       setShowNuevoProveedor(false);
-      setNuevoProveedor({ razon_social: '', cuit: '', condicion_fiscal: 'responsable_inscripto' });
+      setNuevoProveedor({ razon_social: '', cuit: '', condicion_fiscal: '' });
     } catch (e: any) {
       alert('Error al crear proveedor: ' + e.message);
     } finally {
@@ -1076,15 +1104,16 @@ export const SolicitudDetailPage: React.FC = () => {
                 />
                 <Input
                   label="CUIT"
-                  required
                   value={nuevoProveedor.cuit}
-                  onChange={(e) => setNuevoProveedor(prev => ({ ...prev, cuit: e.target.value }))}
+                  placeholder="00-00000000-0"
+                  onChange={(e) => setNuevoProveedor(prev => ({ ...prev, cuit: formatCUIT(e.target.value) }))}
                 />
                 <Select
                   label="Condición Fiscal"
                   value={nuevoProveedor.condicion_fiscal}
                   onChange={(e) => setNuevoProveedor(prev => ({ ...prev, condicion_fiscal: e.target.value }))}
                   options={[
+                    { value: '', label: 'Seleccionar...' },
                     { value: 'responsable_inscripto', label: 'Responsable Inscripto' },
                     { value: 'monotributista', label: 'Monotributista' },
                     { value: 'exento', label: 'Exento' },
@@ -1092,7 +1121,7 @@ export const SolicitudDetailPage: React.FC = () => {
                   ]}
                 />
                 <div className="flex gap-2">
-                  <Button onClick={handleCrearProveedor} disabled={savingProveedor || !nuevoProveedor.razon_social || !nuevoProveedor.cuit}>
+                  <Button onClick={handleCrearProveedor} disabled={savingProveedor || !nuevoProveedor.razon_social}>
                     {savingProveedor ? 'Guardando...' : 'Guardar Proveedor'}
                   </Button>
                   <button type="button" className="text-sm text-slate-500 hover:underline" onClick={() => setShowNuevoProveedor(false)}>Cancelar</button>

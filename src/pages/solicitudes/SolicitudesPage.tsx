@@ -3,20 +3,135 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { StatCard } from '@/components/ui/StatCard';
+import { Modal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Select';
 import { formatCurrency, formatDate } from '@/utils/formatters';
 
 import { supabase } from '@/lib/supabase';
 import { useAuthStore } from '@/stores/authStore';
 
+const formatCUIT = (value: string): string => {
+  const cleaned = value.replace(/\D/g, '').slice(0, 11);
+  if (cleaned.length <= 2) return cleaned;
+  if (cleaned.length <= 10) return `${cleaned.slice(0, 2)}-${cleaned.slice(2)}`;
+  return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 10)}-${cleaned.slice(10)}`;
+};
+
 export const SolicitudesPage: React.FC = () => {
   const [solicitudes, setSolicitudes] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const { user: currentUser } = useAuthStore();
+
+  // --- Compra Express ---
+  const [isExpressModalOpen, setIsExpressModalOpen] = React.useState(false);
+  const [savingExpress, setSavingExpress] = React.useState(false);
+  const [areas, setAreas] = React.useState<any[]>([]);
+  const [providers, setProviders] = React.useState<any[]>([]);
+  const [expressData, setExpressData] = React.useState({
+    titulo: '', descripcion: '', area_id: '', monto: '',
+    fecha_compra: new Date().toISOString().split('T')[0],
+    forma_pago: 'transferencia', factura: null as File | null,
+  });
+
+  // Buscador proveedor express
+  const [proveedorSearch, setProveedorSearch] = React.useState('');
+  const [proveedorFocused, setProveedorFocused] = React.useState(false);
+  const [proveedorSeleccionado, setProveedorSeleccionado] = React.useState<{ id: string; razon_social: string } | null>(null);
+  const [showNuevoProveedor, setShowNuevoProveedor] = React.useState(false);
+  const [nuevoProveedor, setNuevoProveedor] = React.useState({ razon_social: '', cuit: '', condicion_fiscal: 'responsable_inscripto' });
+  const [savingProveedor, setSavingProveedor] = React.useState(false);
+
+  const proveedoresFiltrados = proveedorSearch.length >= 2
+    ? providers.filter(p => p.razon_social.toLowerCase().includes(proveedorSearch.toLowerCase()))
+    : [];
+
+  const resetExpressModal = () => {
+    setExpressData({ titulo: '', descripcion: '', area_id: '', monto: '', fecha_compra: new Date().toISOString().split('T')[0], forma_pago: 'transferencia', factura: null });
+    setProveedorSearch(''); setProveedorSeleccionado(null); setShowNuevoProveedor(false);
+    setNuevoProveedor({ razon_social: '', cuit: '', condicion_fiscal: 'responsable_inscripto' });
+  };
+
+  const handleCrearProveedorExpress = async () => {
+    if (!nuevoProveedor.razon_social.trim()) return;
+    const cleanCuit = nuevoProveedor.cuit.trim();
+    if (cleanCuit && !/^\d{2}-\d{8}-\d{1}$/.test(cleanCuit)) { alert('Formato de CUIT inválido (XX-XXXXXXXX-X)'); return; }
+    setSavingProveedor(true);
+    try {
+      const insertData: any = { razon_social: nuevoProveedor.razon_social.trim(), activo: true };
+      if (cleanCuit) insertData.cuit = cleanCuit;
+      if (nuevoProveedor.condicion_fiscal) insertData.condicion_fiscal = nuevoProveedor.condicion_fiscal;
+      const { data, error } = await (supabase.from('proveedores') as any).insert(insertData).select('id, razon_social').single();
+      if (error) throw error;
+      setProviders(prev => [...prev, data]);
+      setProveedorSeleccionado(data);
+      setProveedorSearch(data.razon_social);
+      setShowNuevoProveedor(false);
+      setNuevoProveedor({ razon_social: '', cuit: '', condicion_fiscal: 'responsable_inscripto' });
+    } catch (e: any) { alert('Error al crear proveedor: ' + e.message); }
+    finally { setSavingProveedor(false); }
+  };
+
+  const handleGuardarCompraExpress = async () => {
+    const proveedorSnapshot = proveedorSeleccionado;
+    if (!expressData.titulo || !expressData.area_id || !expressData.monto || !proveedorSnapshot?.id) {
+      alert('Completá los campos obligatorios: título, área, proveedor y monto.');
+      return;
+    }
+    setSavingExpress(true);
+    try {
+      // 1. Subir factura si existe
+      let facturaUrl = null;
+      if (expressData.factura) {
+        const fileExt = expressData.factura.name.split('.').pop()?.toLowerCase();
+        const fileName = `factura-express-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('presupuestos').upload(fileName, expressData.factura);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('presupuestos').getPublicUrl(fileName);
+        facturaUrl = publicUrl;
+      }
+
+      // 2. Crear solicitud con estado 'compra_express'
+      const { data: solData, error: solError } = await (supabase.from('solicitudes') as any)
+        .insert({ titulo: expressData.titulo, descripcion: expressData.descripcion || expressData.titulo, area_id: expressData.area_id, solicitante_id: currentUser?.id, estado: 'compra_express' })
+        .select('id')
+        .single();
+      if (solError) throw solError;
+
+      // 3. Crear compra directamente — el trigger fn_cc_debito_por_compra registra la CC automáticamente
+      const { error: compraError } = await (supabase.from('compras') as any).insert({
+        solicitud_id: solData.id,
+        presupuesto_id: null,
+        proveedor_id: proveedorSnapshot.id,
+        registrado_por: currentUser?.id,
+        tipo: 'directa',
+        estado: 'compra_realizada',
+        monto_total: parseFloat(expressData.monto),
+        requiere_tribunal: false,
+        fecha_compra: expressData.fecha_compra,
+        forma_pago: expressData.forma_pago,
+        factura_url: facturaUrl,
+        observaciones: `Proveedor: ${proveedorSnapshot.razon_social}`,
+      });
+      if (compraError) throw compraError;
+
+      setIsExpressModalOpen(false);
+      resetExpressModal();
+      fetchSolicitudes();
+    } catch (e: any) {
+      alert('Error: ' + e.message);
+    } finally {
+      setSavingExpress(false);
+    }
+  };
 
   React.useEffect(() => {
     fetchSolicitudes();
+    if (currentUser?.rol === 'compras' || (currentUser?.rol as any) === 'admin') {
+      supabase.from('areas').select('id, nombre').eq('activa', true).order('nombre').then(({ data }) => { if (data) setAreas(data); });
+      (supabase.from('proveedores') as any).select('id, razon_social').eq('activo', true).order('razon_social').then(({ data }: any) => { if (data) setProviders(data); });
+    }
   }, []);
-
-  const { user: currentUser } = useAuthStore();
 
   const fetchSolicitudes = async () => {
     setLoading(true);
@@ -69,6 +184,16 @@ export const SolicitudesPage: React.FC = () => {
   };
 
   const getEnhancedStatus = (exp: any) => {
+    if (exp.estado === 'compra_express') {
+      const compra = exp.compras?.[0];
+      const hasPagos = compra?.pagos && compra.pagos.length > 0;
+      if (hasPagos) {
+        const allPaid = compra.pagos.every((p: any) => p.estado === 'pagado');
+        if (allPaid) return { label: 'FINALIZADA', color: 'success', icon: 'verified' };
+        return { label: 'EN PAGOS', color: 'primary', icon: 'payments' };
+      }
+      return { label: 'COMPRA DIRECTA', color: 'secondary', icon: 'bolt' };
+    }
     if (exp.estado === 'rechazada') return { label: 'RECHAZADA', color: 'error', icon: 'cancel' };
     if (exp.estado === 'pendiente_aprobacion_presupuestos') return { label: 'EVALUANDO', color: 'warning', icon: 'rule' };
     
@@ -117,13 +242,20 @@ export const SolicitudesPage: React.FC = () => {
             Gestione y supervise las solicitudes de compra de la administración central.
           </p>
         </div>
-        {(currentUser?.rol === 'area' || currentUser?.rol === 'compras' || (currentUser?.rol as any) === 'admin') && (
-          <Link to="/solicitudes/nueva">
-            <Button size="lg" leftIcon="add_circle">
-              NUEVA SOLICITUD
+        <div className="flex gap-3 flex-wrap">
+          {(currentUser?.rol === 'compras' || (currentUser?.rol as any) === 'admin') && (
+            <Button size="lg" leftIcon="bolt" variant="secondary" onClick={() => setIsExpressModalOpen(true)}>
+              COMPRA DIRECTA
             </Button>
-          </Link>
-        )}
+          )}
+          {(currentUser?.rol === 'area' || currentUser?.rol === 'compras' || (currentUser?.rol as any) === 'admin') && (
+            <Link to="/solicitudes/nueva">
+              <Button size="lg" leftIcon="add_circle">
+                NUEVA SOLICITUD
+              </Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -282,6 +414,106 @@ export const SolicitudesPage: React.FC = () => {
           <p className="text-xs font-medium text-slate-500">Mostrando {solicitudes.length} expedientes totales</p>
         </div>
       </div>
+
+      {/* Modal Compra Directa Express */}
+      <Modal
+        isOpen={isExpressModalOpen}
+        onClose={() => { setIsExpressModalOpen(false); resetExpressModal(); }}
+        title="Compra Directa"
+        footer={
+          <Button onClick={handleGuardarCompraExpress} disabled={savingExpress}>
+            {savingExpress ? 'Guardando...' : 'Registrar Compra'}
+          </Button>
+        }
+      >
+        <div className="space-y-4">
+          <Input label="Título / Concepto" required value={expressData.titulo} onChange={e => setExpressData(p => ({ ...p, titulo: e.target.value }))} />
+          <Input label="Descripción (Opcional)" value={expressData.descripcion} onChange={e => setExpressData(p => ({ ...p, descripcion: e.target.value }))} />
+          <Select
+            label="Área"
+            required
+            value={expressData.area_id}
+            onChange={e => setExpressData(p => ({ ...p, area_id: e.target.value }))}
+            options={areas.map(a => ({ value: a.id, label: a.nombre }))}
+          />
+
+          {/* Buscador proveedor */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Proveedor <span className="text-red-500">*</span></label>
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Buscar por nombre..."
+                value={proveedorSearch}
+                onChange={e => {
+                  setProveedorSearch(e.target.value);
+                  if (proveedorSeleccionado && e.target.value !== proveedorSeleccionado.razon_social) {
+                    setProveedorSeleccionado(null);
+                  }
+                  setShowNuevoProveedor(false);
+                }}
+                onFocus={() => setProveedorFocused(true)}
+                onBlur={() => setTimeout(() => setProveedorFocused(false), 150)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+              />
+              {proveedorSeleccionado && <span className="absolute right-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-green-500 text-base">check_circle</span>}
+              {proveedorFocused && proveedorSearch.length >= 2 && !proveedorSeleccionado && (
+                <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  {proveedoresFiltrados.length > 0 ? proveedoresFiltrados.map(p => (
+                    <button key={p.id} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50"
+                      onMouseDown={() => { setProveedorSeleccionado(p); setProveedorSearch(p.razon_social); }}>
+                      {p.razon_social}
+                    </button>
+                  )) : (
+                    <div className="px-3 py-3 text-sm text-slate-500 flex flex-col gap-2">
+                      <span>No se encontró "{proveedorSearch}"</span>
+                      <button type="button" className="text-primary font-semibold text-left hover:underline"
+                        onMouseDown={() => { setShowNuevoProveedor(true); setNuevoProveedor(p => ({ ...p, razon_social: proveedorSearch })); }}>
+                        + Agregar "{proveedorSearch}" como nuevo proveedor
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            {showNuevoProveedor && (
+              <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg space-y-3">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Nuevo Proveedor</p>
+                <Input label="Razón Social" required value={nuevoProveedor.razon_social} onChange={e => setNuevoProveedor(p => ({ ...p, razon_social: e.target.value }))} />
+                <Input label="CUIT" value={nuevoProveedor.cuit} onChange={e => setNuevoProveedor(p => ({ ...p, cuit: formatCUIT(e.target.value) }))} />
+                <Select label="Condición Fiscal" value={nuevoProveedor.condicion_fiscal} onChange={e => setNuevoProveedor(p => ({ ...p, condicion_fiscal: e.target.value }))}
+                  options={[{ value: 'responsable_inscripto', label: 'Responsable Inscripto' }, { value: 'monotributista', label: 'Monotributista' }, { value: 'exento', label: 'Exento' }, { value: 'consumidor_final', label: 'Consumidor Final' }]} />
+                <div className="flex gap-2">
+                  <Button onClick={handleCrearProveedorExpress} disabled={savingProveedor || !nuevoProveedor.razon_social}>
+                    {savingProveedor ? 'Guardando...' : 'Guardar Proveedor'}
+                  </Button>
+                  <button type="button" className="text-sm text-slate-500 hover:underline" onClick={() => setShowNuevoProveedor(false)}>Cancelar</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Monto Total" type="number" required value={expressData.monto} onChange={e => setExpressData(p => ({ ...p, monto: e.target.value }))} />
+            <Input label="Fecha de Compra" type="date" required value={expressData.fecha_compra} onChange={e => setExpressData(p => ({ ...p, fecha_compra: e.target.value }))} />
+          </div>
+          <Select label="Forma de Pago" value={expressData.forma_pago} onChange={e => setExpressData(p => ({ ...p, forma_pago: e.target.value }))}
+            options={[{ value: 'transferencia', label: 'Transferencia' }, { value: 'cheque', label: 'Cheque' }, { value: 'efectivo', label: 'Efectivo' }]} />
+
+          {/* Factura */}
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Factura (Opcional)</label>
+            <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center hover:border-primary transition-colors cursor-pointer relative">
+              <input type="file" accept="application/pdf,image/*" className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={e => setExpressData(p => ({ ...p, factura: e.target.files?.[0] || null }))} />
+              <div className="flex flex-col items-center gap-1">
+                <span className="material-symbols-outlined text-slate-400">upload_file</span>
+                <p className="text-[11px] text-slate-500">{expressData.factura ? expressData.factura.name : 'Haz clic para subir o arrastra un archivo'}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       {/* Decorative Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

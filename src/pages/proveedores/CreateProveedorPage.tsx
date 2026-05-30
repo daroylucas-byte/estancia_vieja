@@ -8,12 +8,26 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { supabase } from '@/lib/supabase';
 
+// Input masking helpers
+const formatCUIT = (value: string): string => {
+  const cleaned = value.replace(/\D/g, '').slice(0, 11);
+  if (cleaned.length <= 2) return cleaned;
+  if (cleaned.length <= 10) return `${cleaned.slice(0, 2)}-${cleaned.slice(2)}`;
+  return `${cleaned.slice(0, 2)}-${cleaned.slice(2, 10)}-${cleaned.slice(10)}`;
+};
+
+const formatCBU = (value: string): string => {
+  const cleaned = value.replace(/\D/g, '').slice(0, 22);
+  if (cleaned.length <= 8) return cleaned;
+  return `${cleaned.slice(0, 8)}-${cleaned.slice(8)}`;
+};
+
 const proveedorSchema = z.object({
   razon_social: z.string().min(3, 'La razón social es obligatoria'),
   nombre_fantasia: z.string().optional(),
-  cuit: z.string().regex(/^\d{2}-\d{8}-\d{1}$/, 'Formato de CUIT inválido (XX-XXXXXXXX-X)'),
-  condicion_fiscal: z.enum(['responsable_inscripto', 'monotributista', 'exento', 'consumidor_final']),
-  rubro: z.string().min(1, 'El rubro es obligatorio'),
+  cuit: z.string().optional().or(z.literal('')).refine(val => !val || /^\d{2}-\d{8}-\d{1}$/.test(val), { message: 'Formato de CUIT inválido (XX-XXXXXXXX-X)' }),
+  condicion_fiscal: z.enum(['responsable_inscripto', 'monotributista', 'exento', 'consumidor_final']).optional().or(z.literal('')),
+  rubro: z.string().optional().or(z.literal('')),
   email: z.string().email('Email inválido').optional().or(z.literal('')),
   telefono: z.string().optional(),
   direccion: z.string().optional(),
@@ -21,7 +35,7 @@ const proveedorSchema = z.object({
   provincia: z.string().default('Córdoba'),
   codigo_postal: z.string().optional(),
   banco: z.string().optional(),
-  cbu: z.string().length(22, 'El CBU debe tener 22 dígitos').optional().or(z.literal('')),
+  cbu: z.string().optional().or(z.literal('')).refine(val => !val || val.replace(/\D/g, '').length === 22, { message: 'El CBU debe tener 22 dígitos' }),
   alias_cbu: z.string().optional(),
 });
 
@@ -40,7 +54,8 @@ export const CreateProveedorPage: React.FC = () => {
     resolver: zodResolver(proveedorSchema) as any,
     defaultValues: {
       provincia: 'Córdoba',
-      condicion_fiscal: 'responsable_inscripto',
+      condicion_fiscal: '',
+      rubro: '',
     }
   });
 
@@ -65,10 +80,18 @@ export const CreateProveedorPage: React.FC = () => {
 
   const onSubmit = async (data: ProveedorForm) => {
     try {
+      const formattedData = {
+        ...data,
+        cbu: data.cbu ? data.cbu.replace(/\D/g, '') : null,
+        cuit: data.cuit ? data.cuit.trim() : null,
+        rubro: data.rubro || null,
+        condicion_fiscal: data.condicion_fiscal || null,
+      };
+
       const { error } = await supabase
         .from('proveedores')
         .insert([{
-          ...data,
+          ...formattedData,
           activo: true
         }] as any);
 
@@ -121,15 +144,18 @@ export const CreateProveedorPage: React.FC = () => {
             <Input
               label="CUIT"
               placeholder="00-00000000-0"
-              required
               error={errors.cuit?.message}
-              {...register('cuit')}
+              {...register('cuit', {
+                onChange: (e) => {
+                  e.target.value = formatCUIT(e.target.value);
+                }
+              })}
             />
 
             <Select
               label="Condición Fiscal"
-              required
               options={[
+                { value: '', label: 'Seleccionar...' },
                 { value: 'responsable_inscripto', label: 'Responsable Inscripto' },
                 { value: 'monotributista', label: 'Monotributista' },
                 { value: 'exento', label: 'Exento' },
@@ -140,9 +166,11 @@ export const CreateProveedorPage: React.FC = () => {
 
             <Select
               label="Rubro Principal"
-              required
               error={errors.rubro?.message}
-              options={rubros.map(r => ({ value: r.nombre, label: r.nombre }))}
+              options={[
+                { value: '', label: 'Seleccionar...' },
+                ...rubros.map(r => ({ value: r.nombre, label: r.nombre }))
+              ]}
               disabled={loadingRubros}
               {...register('rubro')}
             />
@@ -176,7 +204,11 @@ export const CreateProveedorPage: React.FC = () => {
                 label="CBU"
                 placeholder="22 dígitos"
                 error={errors.cbu?.message}
-                {...register('cbu')}
+                {...register('cbu', {
+                  onChange: (e) => {
+                    e.target.value = formatCBU(e.target.value);
+                  }
+                })}
               />
             </div>
             <Input

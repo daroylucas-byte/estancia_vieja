@@ -44,7 +44,7 @@ export const ProveedoresPage: React.FC = () => {
 
   const filteredProveedores = proveedores.filter(p => 
     p.razon_social.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.cuit.includes(searchTerm)
+    (p.cuit && p.cuit.includes(searchTerm))
   );
 
   return (
